@@ -218,6 +218,7 @@ function escolhaDoDia(habito, valor) {
 
 // Folha do dia, como no Loop: segurar uma célula da grade abre o estado e a nota daquele dia.
 // Salvar grava os dois juntos: dá para só marcar, só anotar, ou anotar e já concluir ou folgar.
+// A folha abre sem pôr o foco na nota: no celular o teclado subiria e cobriria as opções.
 // O estado só é regravado se mudou na folha; mudar por aqui não mexe nas marcas das rotinas,
 // como o toque na grade.
 function editarDia(habito, dia) {
@@ -331,7 +332,6 @@ function editarDia(habito, dia) {
       ),
     ),
   });
-  nota.focus();
 }
 
 function mover(habito, passo) {
