@@ -185,20 +185,152 @@ window.addEventListener('popstate', () => {
   agendarAcerto();
 });
 
+// Tempo e curva da mola de folha, lidos do CSS (variáveis --mola-folha*), com reserva.
+function molaDaFolha() {
+  const css = getComputedStyle(document.documentElement);
+  const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ms = Number.parseFloat(css.getPropertyValue('--mola-folha-ms'));
+  const curva = css.getPropertyValue('--mola-folha').replace(/\s+/g, ' ').trim();
+  return {
+    duration: reduzir ? 0 : Number.isFinite(ms) ? ms : 485,
+    easing: curva || 'cubic-bezier(0.2, 0, 0, 1)',
+  };
+}
+
+// Com aoTerminar (fechar), a folha fica onde a animação terminou até sair da tela.
+function deslizar(dialogo, de, para, aoTerminar) {
+  const animacao = dialogo.animate(
+    [{ transform: `translateY(${de}px)` }, { transform: `translateY(${para}px)` }],
+    { ...molaDaFolha(), fill: aoTerminar ? 'forwards' : 'none' },
+  );
+  if (aoTerminar) animacao.onfinish = aoTerminar;
+}
+
+const ARRASTE_MINIMO = 6; // px até o toque no topo virar arraste (antes disso é toque normal)
+
+// Arrastar a folha pelo topo, como no iPhone. Para baixo fecha (ou pergunta antes, com
+// aoTentarFechar). Com alturas, a folha abre na metade da tela, sobe para a altura cheia
+// ao arrastar para cima ou ao focar um campo, e desce para a metade antes de fechar.
+// Só transform anima; a troca de altura muda o layout de uma vez e a diferença é animada.
+function tornarArrastavel(dialogo, topo, { alturas, fechar, tentarFechar }) {
+  let inicio = null; // { y, id }
+  let arrastando = false;
+  let deslocamento = 0;
+  let amostras = []; // [tempo, y] dos últimos movimentos, para a velocidade ao soltar
+
+  const cheia = () => !dialogo.classList.contains('metade');
+
+  const trocarAltura = (paraCheia) => {
+    const antes = dialogo.getBoundingClientRect().top;
+    dialogo.style.transform = '';
+    dialogo.classList.toggle('metade', !paraCheia);
+    const depois = dialogo.getBoundingClientRect().top;
+    deslizar(dialogo, antes - depois, 0);
+  };
+
+  const soltar = () => {
+    dialogo.classList.remove('arrastando');
+    const altura = dialogo.offsetHeight;
+    const [t0, y0] = amostras[0] ?? [0, 0];
+    const [t1, y1] = amostras.at(-1) ?? [0, 0];
+    const velocidade = t1 > t0 ? (y1 - y0) / (t1 - t0) : 0; // px/ms, positivo para baixo
+    const desceu = velocidade > 0.6 || deslocamento > altura * 0.3;
+    const subiu = velocidade < -0.4 || deslocamento < -40;
+    // trocarAltura mede a folha ainda deslocada pelo dedo e anima dali.
+    if (alturas && !cheia() && subiu) {
+      trocarAltura(true);
+    } else if (alturas && cheia() && desceu && deslocamento < altura * 0.6 && velocidade < 1.5) {
+      trocarAltura(false);
+    } else {
+      dialogo.style.transform = '';
+      if (desceu && !tentarFechar) {
+        deslizar(dialogo, deslocamento, altura, fechar);
+      } else {
+        deslizar(dialogo, deslocamento, 0);
+        if (desceu) tentarFechar();
+      }
+    }
+  };
+
+  // O movimento é ouvido na janela a partir do toque no topo: o dedo pode sair do topo
+  // sem perder o arraste, e sem captura um toque parado num botão do topo continua clique.
+  const mover = (e) => {
+    if (!inicio || e.pointerId !== inicio.id) return;
+    const dy = e.clientY - inicio.y;
+    if (!arrastando) {
+      if (Math.abs(dy) < ARRASTE_MINIMO) return;
+      arrastando = true;
+      dialogo.classList.add('arrastando');
+    }
+    // Para cima a folha resiste: cresce até a cheia (com alturas) ou quase não sai do lugar.
+    const resistencia = alturas && !cheia() ? 0.5 : 0.15;
+    deslocamento = dy >= 0 ? dy : Math.max(dy * resistencia, -60);
+    dialogo.style.transform = `translateY(${deslocamento}px)`;
+    amostras.push([e.timeStamp, e.clientY]);
+    amostras = amostras.filter(([t]) => e.timeStamp - t <= 80);
+  };
+  // Depois de um arraste, o clique que o navegador gera ao soltar não aciona nada.
+  const engolirClique = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  const terminar = (e) => {
+    if (!inicio || e.pointerId !== inicio.id) return;
+    inicio = null;
+    window.removeEventListener('pointermove', mover);
+    window.removeEventListener('pointerup', terminar);
+    window.removeEventListener('pointercancel', terminar);
+    if (!arrastando) return;
+    window.addEventListener('click', engolirClique, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', engolirClique, { capture: true }), 0);
+    soltar();
+  };
+  topo.addEventListener('pointerdown', (e) => {
+    inicio = { y: e.clientY, id: e.pointerId };
+    arrastando = false;
+    deslocamento = 0;
+    amostras = [[e.timeStamp, e.clientY]];
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', terminar);
+    window.addEventListener('pointercancel', terminar);
+  });
+
+  if (alturas) {
+    dialogo.classList.add('com-alturas', 'metade');
+    const abertaEm = performance.now();
+    dialogo.addEventListener('focusin', (e) => {
+      if (cheia() || !e.target.matches('input, textarea, select')) return;
+      // Foco logo ao abrir (tarefa nova): já abre cheia, sem passar pela metade.
+      if (performance.now() - abertaEm < 100) dialogo.classList.remove('metade');
+      else trocarAltura(true);
+    });
+  }
+}
+
 // Folha que sobe do rodapé (bottom sheet). Devolve a função que a fecha.
 // aoTentarFechar: chamado no Esc ou no botão voltar, no lugar de fechar direto.
 // Serve para a folha perguntar antes de descartar o que foi digitado.
-export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTentarFechar }) {
+// cabecalho: elemento no lugar do título (por exemplo, a barra com Cancelar e Salvar).
+// alturas: a folha abre na metade da tela e sobe para a altura cheia (o corpo rola dentro).
+export function abrirFolha({
+  titulo,
+  cabecalho,
+  corpo,
+  alturas = false,
+  fecharNoFundo = true,
+  aoFechar,
+  aoTentarFechar,
+}) {
+  const topo = h(
+    'div',
+    { class: 'folha-topo' },
+    h('div', { class: 'folha-pega' }),
+    cabecalho ?? (titulo ? h('h2', { class: 'folha-titulo' }, titulo) : null),
+  );
   const dialogo = h(
     'dialog',
     { class: 'folha' },
-    h(
-      'div',
-      { class: 'folha-dentro' },
-      h('div', { class: 'folha-pega' }),
-      titulo ? h('h2', { class: 'folha-titulo' }, titulo) : null,
-      corpo,
-    ),
+    h('div', { class: 'folha-dentro' }, topo, alturas ? h('div', { class: 'folha-corpo' }, corpo) : corpo),
   );
   document.body.append(dialogo);
 
@@ -247,6 +379,8 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
       if (comecouNoFundo && e.target === dialogo) fechar();
     });
   }
+
+  tornarArrastavel(dialogo, topo, { alturas, fechar, tentarFechar: aoTentarFechar });
 
   dialogo.showModal();
   return fechar;
@@ -315,6 +449,11 @@ export function confirmar(mensagem, rotuloSim = 'Excluir') {
 
 export function campo(rotulo, entrada) {
   return h('label', { class: 'rotulo' }, rotulo, entrada);
+}
+
+// Linha de um grupo de campos, como nos Ajustes do iPhone: rótulo à esquerda, valor à direita.
+export function linhaCampo(rotulo, entrada) {
+  return h('label', { class: 'linha-campo' }, h('span', null, rotulo), entrada);
 }
 
 // compacto: quando há mais conteúdo logo abaixo (a seção de concluídas), a mensagem
