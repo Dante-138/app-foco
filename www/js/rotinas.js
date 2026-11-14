@@ -709,7 +709,7 @@ function render(raiz) {
       : h(
           'div',
           { class: 'progresso' },
-          h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } }),
+          h('div', { class: 'progresso-barra', style: { transform: `scaleX(${porcento / 100})` } }),
         ),
     ...corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens: itens.length > 0 }),
   );
