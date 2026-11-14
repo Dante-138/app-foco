@@ -20,8 +20,18 @@
 // 2. Assunto com no máximo 72 caracteres e sem ponto final
 // 3. Nenhuma linha de coautoria ou de "gerado por" na mensagem (única exceção: a assinatura
 //    que o Dependabot põe nos commits dele; ver ASSINATURA_DO_DEPENDABOT)
+// 4. Nenhum termo da lista proibida (nomes e dados que não podem ir para um repositório
+//    público), sem diferenciar maiúscula nem acento. A lista nunca fica no repositório:
+//      TERMOS_PROIBIDOS          variável de ambiente (no CI, um secret), um termo por linha
+//                                ou separados por vírgula; "#" começa um comentário
+//      ARQUIVO_TERMOS_PROIBIDOS  arquivo local com a mesma lista. Padrão:
+//                                ~/.config/portao-de-qualidade/termos-proibidos.txt
+//    O aviso diz só o número do termo na lista: o log do CI é público.
 
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const TIPOS = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert'];
@@ -52,14 +62,53 @@ const ASSINATURA_DO_DEPENDABOT = /^Signed-off-by: dependabot\[bot\] <[^<>\n]*>[ 
 
 export const ehDependabot = (autor) => AUTOR_DEPENDABOT.test(autor);
 
+// Regra 4. Minúsculas e sem acento: "José" e "jose" são o mesmo termo.
+export const normalizar = (texto) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+// Lê a lista de termos: um por linha ou separados por vírgula; "#" começa um comentário.
+export function lerTermos(texto) {
+  return texto
+    .split(/[\n,]/)
+    .map((linha) => linha.split('#', 1)[0].trim())
+    .filter(Boolean);
+}
+
+// O termo inteiro, não pedaço de palavra: "ana" não reprova "banana".
+function contemTermo(textoNormalizado, termo) {
+  const escapado = normalizar(termo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapado}($|[^\\p{L}\\p{N}])`, 'u').test(textoNormalizado);
+}
+
+export function problemasDosTermos(texto, termos) {
+  const normalizado = normalizar(texto);
+  return termos.flatMap((termo, indice) =>
+    contemTermo(normalizado, termo) ? [`contém o termo proibido nº ${indice + 1} da lista`] : [],
+  );
+}
+
 // Devolve a lista de problemas da mensagem inteira (assunto + corpo).
 // autor: "Nome <e-mail>" de quem fez o commit; só muda o resultado quando é o Dependabot.
-export function problemasDaMensagem(mensagem, autor = '') {
+// termos: a lista proibida da regra 4 (vazia quando não há lista configurada).
+export function problemasDaMensagem(mensagem, autor = '', termos = []) {
   const [assunto = ''] = mensagem.split('\n');
   const problemas = problemasDoAssunto(assunto.trim());
   const conferida = ehDependabot(autor) ? mensagem.replace(ASSINATURA_DO_DEPENDABOT, '') : mensagem;
   if (AUTORIA_DE_TERCEIRO.test(conferida)) problemas.push('contém linha de coautoria ou de "gerado por"');
+  problemas.push(...problemasDosTermos(mensagem, termos));
   return problemas;
+}
+
+function termosConfigurados() {
+  const arquivo =
+    process.env.ARQUIVO_TERMOS_PROIBIDOS ??
+    join(homedir(), '.config', 'portao-de-qualidade', 'termos-proibidos.txt');
+  const termos = [
+    ...lerTermos(process.env.TERMOS_PROIBIDOS ?? ''),
+    ...(existsSync(arquivo) ? lerTermos(readFileSync(arquivo, 'utf8')) : []),
+  ];
+  // No GitHub Actions, esconde cada termo do log, caso algum rótulo o repita.
+  if (process.env.GITHUB_ACTIONS === 'true') for (const termo of termos) console.log(`::add-mask::${termo}`);
+  return termos;
 }
 
 function commitsDesde(base, ponta) {
@@ -97,8 +146,12 @@ function conferirPr() {
     return 2;
   }
   const corpo = process.env.CORPO_PR ?? '';
+  const termos = termosConfigurados();
   return relatar([
-    { rotulo: `título do PR: ${titulo}`, problemas: problemasDaMensagem(`${titulo}\n\n${corpo}`) },
+    {
+      rotulo: `título do PR: ${titulo}`,
+      problemas: problemasDaMensagem(`${titulo}\n\n${corpo}`, '', termos),
+    },
   ]);
 }
 
@@ -120,14 +173,18 @@ function principal() {
     return 2;
   }
 
+  const termos = termosConfigurados();
   const itens = commits.map(({ hash, autor, mensagem }) => ({
     rotulo: `${hash} ${mensagem.split('\n')[0]}`,
-    problemas: problemasDaMensagem(mensagem, autor),
+    problemas: problemasDaMensagem(mensagem, autor, termos),
   }));
 
   const tituloDoPr = process.env.TITULO_PR;
   if (tituloDoPr) {
-    itens.push({ rotulo: `título do PR: ${tituloDoPr}`, problemas: problemasDoAssunto(tituloDoPr.trim()) });
+    itens.push({
+      rotulo: `título do PR: ${tituloDoPr}`,
+      problemas: [...problemasDoAssunto(tituloDoPr.trim()), ...problemasDosTermos(tituloDoPr, termos)],
+    });
   }
 
   return relatar(itens);
