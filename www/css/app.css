@@ -178,8 +178,8 @@ ul {
    mais. Só transform: não mexe no layout nem segura o toque. */
 :root {
   --aperto-entra: 90ms;
-  --aperto-solta: 300ms;
-  --mola-solta: cubic-bezier(0.2, 0, 0, 1);
+  --aperto-solta: var(--mola-estado-ms, 300ms);
+  --mola-solta: var(--mola-estado, cubic-bezier(0.2, 0, 0, 1));
 }
 
 :where(
