@@ -2165,7 +2165,9 @@ test('fonte: a Inter vem do próprio app e carrega com a política de segurança
   const fonte = await pagina.evaluate(async () => {
     await document.fonts.ready;
     return {
-      carregou: document.fonts.check('17px Inter'),
+      carregou: [...document.fonts].some(
+        (f) => f.family.replaceAll('"', '') === 'Inter' && f.status === 'loaded',
+      ),
       corpo: getComputedStyle(document.body).fontFamily,
     };
   });
