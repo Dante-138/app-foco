@@ -15,10 +15,12 @@ function comDados() {
       {
         id: 'r',
         nome: 'Manhã',
+        diasDaSemana: [1, 2, 3, 4, 5],
         itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30', habitoId: 'h' }],
       },
     ],
     rotinaAtiva: 'r',
+    rotinaDoDiaEm: '2026-11-12',
     habitos: [
       { id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null, arquivado: true },
     ],

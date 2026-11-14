@@ -9,6 +9,8 @@ import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
 import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
 import { devolver } from './nucleo/rotina-edicao.js';
+import { abrirRotinaDoDia, definirDias, descreverDias } from './nucleo/rotina-do-dia.js';
+import { seletorDeDias } from './dias-da-semana.js';
 import {
   campoDoNome,
   desfazerEdicao,
@@ -343,7 +345,7 @@ function editarRotina(rotina) {
       const existentes = new Set(itens.map((i) => i.id));
       if (marcas[rotina.id]) marcas[rotina.id] = marcas[rotina.id].filter((id) => existentes.has(id));
     } else {
-      const nova = { id: uid(), nome: nomeFinal, itens };
+      const nova = { id: uid(), nome: nomeFinal, diasDaSemana: [], itens };
       estado.rotinas.push(nova);
       estado.rotinaAtiva = nova.id;
     }
@@ -398,11 +400,17 @@ async function excluirRotina(rotina) {
   redesenhar();
 }
 
-// "Fazer uma cópia", como no Keep: mesmos itens e ligações, ids novos, sem as marcas do dia.
+// "Fazer uma cópia", como no Keep: mesmos itens e ligações, ids novos, sem as marcas do dia
+// e sem os dias da semana (cada dia fica com uma rotina só).
 // A cópia entra logo depois da original e já fica aberta.
 function copiarRotina(rotina) {
   const nome = `${rotina.nome} (cópia)`.slice(0, LIMITES.nomeRotina);
-  const copia = { id: uid(), nome, itens: rotina.itens.map((item) => ({ ...item, id: uid() })) };
+  const copia = {
+    id: uid(),
+    nome,
+    diasDaSemana: [],
+    itens: rotina.itens.map((item) => ({ ...item, id: uid() })),
+  };
   estado.rotinas.splice(estado.rotinas.indexOf(rotina) + 1, 0, copia);
   estado.rotinaAtiva = copia.id;
   salvar();
@@ -420,11 +428,59 @@ function moverRotina(rotina, passo) {
   redesenhar();
 }
 
+// Dias da semana em que a rotina abre sozinha. O dia escolhido aqui sai das outras rotinas.
+function escolherDias(rotina) {
+  const dias = seletorDeDias(rotina.diasDaSemana, {
+    rotulo: 'Abrir sozinha nestes dias',
+    atalhos: ['uteis', 'fimDeSemana', 'nenhum'],
+  });
+
+  const aoSalvar = (e) => {
+    e.preventDefault();
+    definirDias(estado.rotinas, rotina, dias.ler());
+    salvar();
+    fechar();
+    redesenhar();
+  };
+
+  const fechar = abrirFolha({
+    titulo: 'Dias da semana',
+    corpo: h(
+      'form',
+      { class: 'folha-form', onsubmit: aoSalvar },
+      dias.elemento,
+      h(
+        'p',
+        { class: 'dica' },
+        'Ao virar o dia, o app abre a rotina do dia. Cada dia da semana fica com uma rotina só: escolher um dia aqui tira esse dia das outras.',
+      ),
+      h(
+        'div',
+        { class: 'linha-botoes' },
+        h('span', { class: 'espaco' }),
+        h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
+        h('button', { type: 'submit', class: 'botao cheio' }, 'Salvar'),
+      ),
+    ),
+  });
+}
+
+// Ao abrir o app e ao virar o dia: abre a rotina do dia da semana, uma vez por dia
+// (nucleo/rotina-do-dia.js). Quem chama redesenha depois.
+export function conferirRotinaDoDia() {
+  const antes = estado.rotinaAtiva;
+  if (!abrirRotinaDoDia(estado, hoje())) return;
+  if (estado.rotinaAtiva !== antes) terminarEdicaoAberta();
+  salvar();
+}
+
 function menuRotina(rotina) {
   const posicao = estado.rotinas.indexOf(rotina);
+  const dias = descreverDias(rotina.diasDaSemana);
   const temMarcados = Boolean(marcasDeHoje()[rotina.id]?.length);
   abrirMenu(rotina.nome, [
     { rotulo: 'Editar como texto', acao: () => editarRotina(rotina) },
+    { rotulo: dias ? `Dias da semana: ${dias}` : 'Dias da semana', acao: () => escolherDias(rotina) },
     { rotulo: 'Fazer uma cópia', acao: () => copiarRotina(rotina) },
     { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverRotina(rotina, -1) },
     {
@@ -571,7 +627,13 @@ function cabecalhoDaRotina(ativa, totalDeItens, feitos) {
       'div',
       {},
       h('h2', {}, ativa.nome),
-      h('p', { class: 'sub' }, totalDeItens ? `${feitos} de ${totalDeItens} hoje` : 'Sem itens'),
+      h(
+        'p',
+        { class: 'sub' },
+        [totalDeItens ? `${feitos} de ${totalDeItens} hoje` : 'Sem itens', descreverDias(ativa.diasDaSemana)]
+          .filter(Boolean)
+          .join(' · '),
+      ),
     ),
     h(
       'button',

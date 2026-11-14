@@ -7,9 +7,11 @@
 // estado = {
 //   versao:       número (sempre a versão atual)
 //   aba:          'rotinas' | 'habitos' | 'tarefas' | 'painel'
-//   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
+//   rotinas:      [{ id, nome, diasDaSemana: [0 a 6] (0 = domingo; dias em que a rotina abre sozinha;
+//                    vazio = nunca), itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
 //                    habitoId: id de um hábito existente | null (marcar o item marca o hábito) }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
+//   rotinaDoDiaEm: 'AAAA-MM-DD' | null   (dia em que a rotina do dia já foi aberta; ver rotina-do-dia.js)
 //   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente;
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
@@ -37,6 +39,7 @@ import { dataValida, horaValida } from './datas.js';
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
+import { diasValidos } from './rotina-do-dia.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
 export const LIMITES = Object.freeze({
@@ -101,6 +104,7 @@ function sanearRotinas(valor, idsDeHabitos, avisos) {
   return comIdUnico(valor, 'rotinas', avisos).map((rotina) => ({
     id: rotina.id,
     nome: cortar(rotina.nome, LIMITES.nomeRotina) || 'Rotina',
+    diasDaSemana: diasValidos(rotina.diasDaSemana),
     itens: comIdUnico(rotina.itens, 'itens de rotina', avisos)
       .slice(0, LIMITES.itensPorRotina)
       .flatMap((item) => sanearItem(item, idsDeHabitos, avisos)),
@@ -226,6 +230,7 @@ export function sanear(dados, { dia, gerarId }) {
     rotinaAtiva: rotinas.some((r) => r.id === dados.rotinaAtiva)
       ? dados.rotinaAtiva
       : (rotinas[0]?.id ?? null),
+    rotinaDoDiaEm: dataValida(dados.rotinaDoDiaEm) ? dados.rotinaDoDiaEm : null,
     marcasRotina: sanearMarcas(dados.marcasRotina, rotinas, dia),
     marcadosNoFim: dados.marcadosNoFim !== false,
     habitos,
