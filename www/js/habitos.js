@@ -5,6 +5,7 @@ import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { hoje, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
+import { devolver, retirar } from './nucleo/desfazer.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import {
   formatar,
@@ -25,6 +26,7 @@ import {
   abrirMenu,
   aoSegurar,
   avisar,
+  avisarComDesfazer,
   confirmar,
   campo,
   estadoVazio,
@@ -456,16 +458,27 @@ function editarHabito(habito) {
 
   const excluir = async () => {
     if (!(await confirmar(`Excluir o hábito "${habito.nome}" e todo o histórico dele?`))) return;
-    estado.habitos = estado.habitos.filter((x) => x.id !== habito.id);
+    const { restantes, removidos } = retirar(estado.habitos, (x) => x.id === habito.id);
+    const registros = estado.registros[habito.id];
+    const notas = estado.notasHabito[habito.id];
+    const ligados = estado.rotinas.flatMap((r) => r.itens.filter((i) => i.habitoId === habito.id));
+    estado.habitos = restantes;
     delete estado.registros[habito.id];
     delete estado.notasHabito[habito.id];
     // Itens de rotina ligados a este hábito ficam sem ligação.
-    for (const rotina of estado.rotinas) {
-      for (const item of rotina.itens) if (item.habitoId === habito.id) item.habitoId = null;
-    }
+    for (const item of ligados) item.habitoId = null;
     salvar();
     fechar();
     redesenhar();
+    // Desfazer devolve o hábito, o histórico, as notas e as ligações dos itens que ainda existem.
+    avisarComDesfazer('Hábito excluído', () => {
+      estado.habitos = devolver(estado.habitos, removidos);
+      if (registros) estado.registros[habito.id] = registros;
+      if (notas) estado.notasHabito[habito.id] = notas;
+      for (const item of ligados) if (item.habitoId === null) item.habitoId = habito.id;
+      salvar();
+      redesenhar();
+    });
   };
 
   // Arquivar guarda o hábito e todo o histórico dele; só tira da grade.

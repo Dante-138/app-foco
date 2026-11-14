@@ -9,6 +9,7 @@ import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
 import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
 import { devolver } from './nucleo/rotina-edicao.js';
+import { devolver as devolverNaLista, retirar } from './nucleo/desfazer.js';
 import {
   campoDoNome,
   desfazerEdicao,
@@ -25,6 +26,7 @@ import {
   abrirFolha,
   abrirMenu,
   avisar,
+  avisarComDesfazer,
   confirmar,
   campo,
   estadoVazio,
@@ -391,11 +393,23 @@ function editarRotina(rotina) {
 
 async function excluirRotina(rotina) {
   if (!(await confirmar(`Excluir a rotina "${rotina.nome}"?`))) return;
-  estado.rotinas = estado.rotinas.filter((r) => r.id !== rotina.id);
+  const { restantes, removidos } = retirar(estado.rotinas, (r) => r.id === rotina.id);
+  const marcas = marcasDeHoje()[rotina.id];
+  const dia = estado.marcasRotina.data;
+  const ativa = estado.rotinaAtiva;
+  estado.rotinas = restantes;
   delete marcasDeHoje()[rotina.id];
   estado.rotinaAtiva = estado.rotinas[0]?.id ?? null;
   salvar();
   redesenhar();
+  // Desfazer devolve a rotina no lugar e, se ainda é o mesmo dia, as marcas dela.
+  avisarComDesfazer('Rotina excluída', () => {
+    estado.rotinas = devolverNaLista(estado.rotinas, removidos);
+    if (marcas && dia === hoje()) marcasDeHoje()[rotina.id] = marcas;
+    estado.rotinaAtiva = ativa;
+    salvar();
+    redesenhar();
+  });
 }
 
 // "Fazer uma cópia", como no Keep: mesmos itens e ligações, ids novos, sem as marcas do dia.
