@@ -33,6 +33,6 @@ jobs:
       - name: Instalar dependências
         run: npm ci --ignore-scripts
 
-      # Reprova se a pontuação cair abaixo do limiar de stryker.config.json.
+      # Reprova se a pontuação cair abaixo do limiar de stryker.config.mjs.
       - name: Teste de mutação do núcleo
         run: npm run test:mutation
