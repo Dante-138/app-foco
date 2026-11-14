@@ -298,6 +298,74 @@ ul {
   color: var(--texto);
 }
 
+/* Título grande, como no iPhone: 34/41 no topo da lista, encolhe para o tamanho de barra
+   (22 px) nos primeiros 48 px de rolagem e uma linha fina aparece embaixo do topo. A
+   animação anda com a rolagem de #conteudo (scroll-driven), só com transform e opacity. */
+body {
+  timeline-scope: --rolagem;
+}
+
+#conteudo {
+  scroll-timeline: --rolagem block;
+}
+
+.topo {
+  position: relative;
+}
+
+.topo::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--linha);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.topo h1 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .topo h1 {
+      font-size: 34px;
+      line-height: 41px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      transform-origin: left center;
+      animation: encolher-titulo linear both;
+      animation-timeline: --rolagem;
+      animation-range: 0 48px;
+    }
+
+    .topo::after {
+      animation: mostrar-linha linear both;
+      animation-timeline: --rolagem;
+      animation-range: 24px 48px;
+    }
+  }
+}
+
+@keyframes encolher-titulo {
+  to {
+    transform: scale(0.647); /* 22 / 34 */
+  }
+}
+
+@keyframes mostrar-linha {
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---------------------------------------------------------------- comuns */
 
 .faixa {
