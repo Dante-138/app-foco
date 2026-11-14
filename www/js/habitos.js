@@ -586,7 +586,7 @@ function render(raiz) {
 
   // Quantos dias cabem: célula de 44 px (igual ao --cel do CSS), e o nome do
   // hábito fica com pelo menos 44% da largura. No Galaxy A36 isso dá 6 dias.
-  const largura = (raiz.clientWidth || window.innerWidth) - 18;
+  const largura = (raiz.clientWidth || window.innerWidth) - 20;
   const n = Math.max(3, Math.min(10, Math.floor((largura * 0.56) / 44)));
   const diaHoje = hoje(); // uma leitura do relógio por desenho: cabeçalho e células usam o mesmo dia
   const dias = Array.from({ length: n }, (_, i) => somaDias(diaHoje, -i));
