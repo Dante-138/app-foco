@@ -102,12 +102,15 @@ Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate
 A regra vale também para o dono do repositório. O portão confere, nesta ordem:
 
 1. **Mensagens de commit e título do PR** no padrão Conventional Commits, com até 72 caracteres
-   e sem linha de coautoria.
+   e sem linha de coautoria. O job `Título` repete a conferência do título e da descrição
+   quando o PR é editado: no merge por squash, são eles que viram o commit na `main`.
 2. **Lint sem nenhum aviso**, e sem comentário de exceção: o `eslint-disable` é proibido.
    Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
 3. **Formatação** conferida pelo Prettier.
 4. **Testes de unidade** com cobertura de 100% de linhas, desvios e funções do núcleo.
-   Um módulo novo no núcleo sem teste reprova.
+   Um módulo novo no núcleo sem teste reprova. Parte deles é por propriedade (fast-check): centenas
+   de dados gerados, muitos malformados, conferem que ler os dados salvos nunca lança exceção,
+   que validar de novo não muda nada e que a migração e o backup não perdem dados.
 5. **Testes de ponta a ponta** em um Chrome real: os fluxos das três abas, o tema, dados
    salvos com problema, duas abas abertas e a política de segurança. Qualquer erro no console
    da página reprova.
@@ -117,6 +120,13 @@ O merge é sempre por squash: cada pull request vira um commit na `main`, com o 
 Todo pull request tem a `main` como base: uma mudança por vez, sem pilha de PRs. O job `Base`
 reprova o PR que aponta para outra branch, inclusive quando a base é trocada depois de aberto.
 Mesclar em outra branch não passa pela proteção da `main`, e a mudança fica fora dela.
+
+Fora do portão, o workflow `Análise` roda em todo PR, na `main` e uma vez por semana:
+
+- **CodeQL**, a análise estática do GitHub, no JavaScript do app e nos workflows. Os resultados
+  ficam na aba Security do repositório.
+- **Dependências**: reprova o PR que traz dependência com vulnerabilidade conhecida.
+- **Workflows**: o actionlint confere a sintaxe e os scripts de shell dos próprios workflows.
 
 ## Estrutura
 
