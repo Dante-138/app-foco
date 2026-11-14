@@ -25,6 +25,7 @@ import {
   svg,
   icone,
   abrirFolha,
+  abrirJanela,
   abrirMenu,
   aoSegurar,
   avisar,
@@ -230,12 +231,14 @@ function escolhaDoDia(habito, valor) {
   return habito.tipo === 'numero' ? 'quantidade' : 'feito';
 }
 
-// Folha do dia, como no Loop: segurar uma célula da grade abre o estado e a nota daquele dia.
-// Salvar grava os dois juntos: dá para só marcar, só anotar, ou anotar e já concluir ou folgar.
-// A folha abre sem pôr o foco na nota: no celular o teclado subiria e cobriria as opções.
-// O estado só é regravado se mudou na folha; mudar por aqui não mexe nas marcas das rotinas,
+// Janela do dia, no jeito do popup da marca do Loop: segurar uma célula da grade abre uma janela
+// pequena presa a ela, com botões redondos de Feito, Folga e Vazio na cor do hábito (o atual
+// preenchido) e a nota do dia logo abaixo. No hábito numérico, o primeiro botão é a quantidade,
+// com o campo do valor. Salvar grava estado e nota juntos; tocar fora fecha sem salvar.
+// A janela abre sem pôr o foco na nota: no celular o teclado subiria e cobriria as opções.
+// O estado só é regravado se mudou aqui; mudar por aqui não mexe nas marcas das rotinas,
 // como o toque na grade.
-function editarDia(habito, dia) {
+function editarDia(habito, dia, ancora) {
   const notaAtual = estado.notasHabito[habito.id]?.[dia] ?? '';
   const valorAtual = estado.registros[habito.id]?.[dia] ?? null;
   const numerico = habito.tipo === 'numero';
@@ -250,39 +253,46 @@ function editarDia(habito, dia) {
     value: quantidadeInicial,
     placeholder: '0',
     autocomplete: 'off',
+    'aria-label': habito.unidade ? `Quantidade (${habito.unidade})` : 'Quantidade',
   });
-  const campoQuantidade = campo(habito.unidade ? `Quantidade (${habito.unidade})` : 'Quantidade', quantidade);
+  const campoQuantidade = h('div', { class: 'janela-quantidade' }, quantidade, habito.unidade);
   const nota = h('textarea', {
-    class: 'entrada',
-    rows: 3,
+    class: 'janela-nota',
+    rows: 2,
     value: notaAtual,
-    placeholder: 'Ex.: dia de viagem',
+    placeholder: 'Nota do dia',
+    'aria-label': 'Nota do dia',
     maxLength: LIMITES.notaHabito,
   });
 
   const opcoes = [
-    numerico ? ['quantidade', 'Quantidade'] : ['feito', 'Feito'],
-    ['pulado', 'Folga'],
-    ['vazio', 'Vazio'],
+    numerico ? ['quantidade', 'Quantidade', 'check'] : ['feito', 'Feito', 'check'],
+    ['pulado', 'Folga', 'menos'],
+    ['vazio', 'Vazio', 'x'],
   ];
-  const segmentos = h('div', { class: 'segmentos', role: 'radiogroup', 'aria-label': 'Estado do dia' });
+  const botoesDeEstado = h('div', {
+    class: 'janela-estados',
+    role: 'radiogroup',
+    'aria-label': 'Estado do dia',
+  });
   const desenhar = () => {
-    segmentos.replaceChildren(
-      ...opcoes.map(([valor, rotulo]) =>
+    botoesDeEstado.replaceChildren(
+      ...opcoes.map(([valor, rotulo, marca]) =>
         h(
           'button',
           {
             type: 'button',
-            class: `segmento${escolha === valor ? ' ativo' : ''}`,
+            class: `janela-estado${escolha === valor ? ' ativo' : ''}`,
             role: 'radio',
             'aria-checked': String(escolha === valor),
+            'aria-label': rotulo,
             onclick: () => {
               escolha = valor;
               desenhar();
               if (valor === 'quantidade') quantidade.focus();
             },
           },
-          rotulo,
+          icone(marca, { tam: 24 }),
         ),
       ),
     );
@@ -326,22 +336,23 @@ function editarDia(habito, dia) {
     redesenhar();
   };
 
-  const fechar = abrirFolha({
-    titulo: `${habito.nome} (${rotuloDia(dia, hoje())})`,
+  const fechar = abrirJanela({
+    rotulo: `${habito.nome} (${rotuloDia(dia, hoje())})`,
+    ancora,
     corpo: h(
       'form',
-      { class: 'folha-form', onsubmit: aoSalvar },
-      h('div', { class: 'rotulo' }, 'Estado do dia', segmentos),
+      { class: 'janela-form', onsubmit: aoSalvar, style: { '--cor': corCss(habito.cor) } },
+      h('p', { class: 'janela-titulo' }, `${habito.nome} · ${rotuloDia(dia, hoje())}`),
+      botoesDeEstado,
       campoQuantidade,
-      campo('Nota do dia', nota),
+      nota,
       h(
         'div',
-        { class: 'linha-botoes' },
+        { class: 'janela-acoes' },
         notaAtual
           ? h('button', { type: 'button', class: 'botao perigo', onclick: excluirNota }, 'Excluir nota')
           : null,
         h('span', { class: 'espaco' }),
-        h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
         h('button', { type: 'submit', class: 'botao cheio' }, 'Salvar'),
       ),
     ),
@@ -581,7 +592,7 @@ function editarHabito(habito) {
 // um ponto no canto.
 function celula(habito, dia, diaHoje) {
   const botao = celulaSemNota(habito, dia, diaHoje);
-  aoSegurar(botao, () => editarDia(habito, dia));
+  aoSegurar(botao, () => editarDia(habito, dia, botao));
   if (estado.notasHabito[habito.id]?.[dia]) {
     botao.classList.add('com-nota');
     botao.setAttribute('aria-label', `${botao.getAttribute('aria-label')}, com nota`);
