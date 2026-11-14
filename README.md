@@ -98,6 +98,66 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
+## Releases
+
+A versão sai dos commits (Conventional Commits), pelo [release-please](https://github.com/googleapis/release-please):
+
+1. A cada merge na `main`, o workflow `Release` mantém um PR `chore: release x.y.z`, em
+   rascunho, com a versão nova no `package.json` e no `android/app/build.gradle` e o
+   `CHANGELOG.md` (Novidades, Correções, Desempenho). Antes da versão 1.0, `feat` sobe o número
+   do meio e `fix` o último.
+2. Esse PR segue o fluxo de qualquer outro: revisão, sai do rascunho, merge.
+3. No merge saem a tag `vX.Y.Z` e a release, e o job `APK` anexa `foco-vX.Y.Z.apk`, assinado
+   com a mesma chave fixa, com uma atestação de proveniência (SLSA). Para conferir que o APK
+   saiu deste repositório, deste commit:
+
+   ```bash
+   gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/foco
+   ```
+
+O `versionCode` do Android sai da versão (1.2.3 vira 10203), então cada release instala por
+cima da anterior sem apagar os dados.
+
+### Secrets da release (uma vez, pelo dono do repositório)
+
+Sem eles o workflow só avisa e termina verde. Nada disso é lido por agente nenhum.
+
+1. **Ambiente `release`**: em Settings, Environments, New environment, nome `release`. Em
+   Deployment branches and tags, escolha Selected branches and tags e acrescente só `main`.
+   Assim a chave do APK só fica disponível para workflow rodando na `main`.
+2. **Chave do APK, no ambiente `release`**. No PowerShell, na pasta das chaves:
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD/foco.jks")) | gh secret set FOCO_KEYSTORE_BASE64 --env release --repo Dante-138/foco
+   ```
+
+   Depois as três que o `gh` pergunta sem mostrar o que é digitado (os mesmos valores do
+   `assinatura.properties`):
+
+   ```bash
+   gh secret set FOCO_KEYSTORE_SENHA --env release --repo Dante-138/foco
+   ```
+
+   ```bash
+   gh secret set FOCO_CHAVE_ALIAS --env release --repo Dante-138/foco
+   ```
+
+   ```bash
+   gh secret set FOCO_CHAVE_SENHA --env release --repo Dante-138/foco
+   ```
+
+3. **`RELEASE_TOKEN`**, no repositório (não no ambiente): em GitHub, Settings, Developer
+   settings, Fine-grained tokens, crie um token só para o repositório `foco`, com Contents e
+   Pull requests em leitura e escrita, e validade de até um ano. Com o token padrão do workflow
+   o PR de release não dispararia o CI, e a proteção da `main` nunca o liberaria.
+
+   ```bash
+   gh secret set RELEASE_TOKEN --repo Dante-138/foco
+   ```
+
+4. Conferir: o próximo merge na `main` abre o PR de release. Quando o token vencer, o workflow
+   falha no passo do release-please; é só criar outro e repetir o passo 3.
+
 ## Portão de qualidade
 
 Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate` do CI verde.
