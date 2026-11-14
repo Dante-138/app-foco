@@ -466,11 +466,14 @@ function escolherDias(rotina) {
 }
 
 // Ao abrir o app e ao virar o dia: abre a rotina do dia da semana, uma vez por dia
-// (nucleo/rotina-do-dia.js). Quem chama redesenha depois.
+// (nucleo/rotina-do-dia.js). Quem chama redesenha depois. Só grava quando a rotina aberta
+// mudou: abrir o app sem tocar em nada continua sem gravar nada, e o dia da escolha vai
+// junto na próxima gravação (refazer a escolha no mesmo dia dá o mesmo resultado).
 export function conferirRotinaDoDia() {
   const antes = estado.rotinaAtiva;
-  if (!abrirRotinaDoDia(estado, hoje())) return;
-  if (estado.rotinaAtiva !== antes) terminarEdicaoAberta();
+  abrirRotinaDoDia(estado, hoje());
+  if (estado.rotinaAtiva === antes) return;
+  terminarEdicaoAberta();
   salvar();
 }
 

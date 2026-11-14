@@ -187,7 +187,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 5);
+  assert.equal(salvo.versao, 6);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -803,11 +803,9 @@ test('rotina do dia: os dias escolhidos no menu; ao virar o dia abre a rotina do
     await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
   };
 
-  await aberta('Folga'); // sem dias, a rotina aberta continua a mesma
-  assert.deepEqual(
-    (await rotinasSalvas()).map((r) => r.diasDaSemana),
-    [[], []],
-  );
+  // Sem dias, a rotina aberta continua a mesma, e abrir o app não regrava os dados.
+  await aberta('Folga');
+  assert.equal(await lerSalvo(pagina, CHAVE), salvo);
 
   // Folga: sábado e domingo, pelo atalho.
   await abrirDias('Dias da semana');
