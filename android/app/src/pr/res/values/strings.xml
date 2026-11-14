@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Só no build da variante de PR (-Pfoco.variante=pr): troca o nome do app. -->
+<resources>
+    <string name="app_name">Foco PR</string>
+    <string name="title_activity_main">Foco PR</string>
+</resources>
