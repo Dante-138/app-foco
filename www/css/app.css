@@ -49,6 +49,64 @@
      --safe-area-inset-*; onde ele não existe, vale o env() do navegador. */
   --topo-seguro: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --base-segura: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+
+  /* Movimento: molas geradas por tools/mola.mjs (não editar à mão; rodar o script de novo).
+     Estado: 307 ms com um pulo leve. Folha e troca de tela: 485 ms, sem pulo. */
+  --mola-estado-ms: 307ms;
+  --mola-estado: linear(
+    0,
+    0.004 1.1%,
+    0.025 2.7%,
+    0.058 4.3%,
+    0.102 6%,
+    0.188 8.7%,
+    0.418 15.2%,
+    0.509 17.9%,
+    0.608 21.2%,
+    0.695 24.5%,
+    0.767 27.7%,
+    0.827 31%,
+    0.875 34.2%,
+    0.912 37.5%,
+    0.945 41.3%,
+    0.971 45.7%,
+    0.989 50.5%,
+    1 56%,
+    1.006 67.9%,
+    1
+  );
+  --mola-folha-ms: 485ms;
+  --mola-folha: linear(
+    0,
+    0.004 1%,
+    0.021 2.4%,
+    0.048 3.8%,
+    0.083 5.2%,
+    0.166 7.9%,
+    0.362 13.7%,
+    0.46 16.8%,
+    0.558 20.3%,
+    0.635 23.4%,
+    0.708 26.8%,
+    0.768 30.2%,
+    0.817 33.7%,
+    0.86 37.5%,
+    0.899 41.9%,
+    0.929 46.7%,
+    0.953 52.2%,
+    0.971 58.4%,
+    0.983 65.3%,
+    0.991 73.5%,
+    1
+  );
+}
+
+/* WebView sem linear(): a mesma desaceleração, sem o pulo. */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --mola-estado: cubic-bezier(0.2, 0, 0, 1);
+    --mola-folha: cubic-bezier(0.2, 0, 0, 1);
+  }
 }
 
 /* Tema claro: cartões brancos sobre cinza bem claro. */
@@ -92,6 +150,19 @@
   --cor-neutro: #1f1f24;
 }
 
+/* Inter, empacotada no app (licença OFL em fonts/OFL.txt): a política de segurança não deixa
+   buscar fonte na rede. Um arquivo variável cobre todos os pesos; só o alfabeto latino. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/inter-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 *,
 *::before,
 *::after {
@@ -123,10 +194,12 @@ body {
   margin: 0 auto;
   background: var(--fundo);
   color: var(--texto);
+  /* Escala de texto do iPhone: título grande 34/41, Title2 22/28, Headline e corpo 17/22,
+     Subhead 15/20, Footnote 13/18, Caption 12/16. */
   font:
-    400 15px/1.35 system-ui,
+    400 17px/22px 'Inter',
+    system-ui,
     'Roboto',
-    'Segoe UI',
     sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
@@ -175,6 +248,108 @@ ul {
   fill: currentColor;
 }
 
+/* ----------------------------------------------------------------- toque */
+
+/* Estado pressionado, como no iPhone: o que é tocável encolhe um pouco ao encostar o dedo
+   (90 ms) e volta com mola ao soltar. Linhas e cartões encolhem pouco; botões pequenos,
+   mais. Só transform: não mexe no layout nem segura o toque. */
+:root {
+  --aperto-entra: 90ms;
+  --aperto-solta: var(--mola-estado-ms, 300ms);
+  --mola-solta: var(--mola-estado, cubic-bezier(0.2, 0, 0, 1));
+}
+
+:where(
+  .rotina-item,
+  .tarefa-corpo,
+  .painel-contador,
+  .menu-item,
+  .concluidas-topo,
+  .habito-nome,
+  .botao,
+  .botao-icone,
+  .chip,
+  .fab,
+  .aba .pilula,
+  .segmento,
+  .amostra,
+  .filtro,
+  .cel,
+  .tarefa-check,
+  .tarefa-estrela,
+  .aviso-acao,
+  .edicao-adicionar,
+  .secao-caixa
+) {
+  transition: transform var(--aperto-solta) var(--mola-solta);
+}
+
+:where(button, [role='button'], .cel) {
+  touch-action: manipulation; /* sem espera de toque duplo; a rolagem continua com o pai */
+}
+
+.rotina-item:active,
+.tarefa-corpo:active,
+.painel-contador:active,
+.menu-item:active,
+.concluidas-topo:active,
+.habito-nome:active {
+  transform: scale(0.97);
+  transition-duration: var(--aperto-entra);
+  transition-timing-function: ease-out;
+}
+
+.botao:active,
+.botao-icone:active,
+.chip:active,
+.fab:active,
+.aba:active .pilula,
+.segmento:active,
+.amostra:active,
+.filtro:active,
+.cel:active,
+.tarefa-check:active,
+.tarefa-estrela:active,
+.aviso-acao:active,
+.edicao-adicionar:active,
+.secao-caixa:active {
+  transform: scale(0.92);
+  transition-duration: var(--aperto-entra);
+  transition-timing-function: ease-out;
+}
+
+/* Área de toque de pelo menos 44 px nos botões que desenham menos que isso: uma camada
+   invisível cresce em volta do botão até 44 px, sem mudar o desenho nem o layout. */
+.chip,
+.filtro,
+.amostra,
+.segmento,
+.secao-caixa,
+.aviso-acao,
+.edicao-adicionar,
+.botao-icone.pequeno {
+  position: relative;
+}
+
+.chip::after,
+.filtro::after,
+.amostra::after,
+.segmento::after,
+.secao-caixa::after,
+.aviso-acao::after,
+.edicao-adicionar::after,
+.botao-icone.pequeno::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - 44px) / 2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --aperto-solta: 0ms;
+  }
+}
+
 /* ------------------------------------------------------------- estrutura */
 
 .topo {
@@ -187,9 +362,10 @@ ul {
 }
 
 .topo h1 {
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 #conteudo {
@@ -205,11 +381,11 @@ ul {
 
 /* Troca de aba: o conteúdo novo entra do lado para onde a pessoa foi. */
 #conteudo.entra-da-direita {
-  animation: entrar-da-direita 0.16s ease-out;
+  animation: entrar-da-direita var(--mola-folha-ms) var(--mola-folha);
 }
 
 #conteudo.entra-da-esquerda {
-  animation: entrar-da-esquerda 0.16s ease-out;
+  animation: entrar-da-esquerda var(--mola-folha-ms) var(--mola-folha);
 }
 
 @keyframes entrar-da-direita {
@@ -251,6 +427,7 @@ ul {
   justify-content: center;
   gap: 4px;
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -331,7 +508,8 @@ ul {
   border: 1px solid var(--linha);
   border-radius: 999px;
   color: var(--texto-2);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   white-space: nowrap;
   /* Segurar o nome de uma lista abre o menu dela: não seleciona o texto nem chama o menu do sistema. */
@@ -364,13 +542,16 @@ ul {
 
 .cabecalho h2 {
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .sub {
   margin-top: 2px;
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
@@ -409,8 +590,10 @@ ul {
 
 .sem-conteudo-titulo {
   margin-bottom: 6px;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--texto);
 }
 
@@ -426,7 +609,8 @@ ul {
   background: #2e2e33; /* aviso escuro nos dois temas */
   color: #ededed;
   box-shadow: 0 4px 14px var(--sombra);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 /* Aviso com botão: o "Desfazer" depois de uma exclusão. */
@@ -460,7 +644,8 @@ ul {
   height: 100%;
   border-radius: 2px;
   background: var(--acento);
-  transition: width 0.2s ease-out;
+  transform-origin: left;
+  transition: transform var(--mola-estado-ms) var(--mola-estado);
 }
 
 .rotina-secao {
@@ -564,7 +749,8 @@ ul {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .ligacao > span {
@@ -655,7 +841,8 @@ ul {
   gap: 8px;
   min-height: 40px;
   padding: 0 6px;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   color: var(--texto-2);
 }
 
@@ -786,6 +973,7 @@ li.mudando-de-area.saindo {
 
 .dia b {
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dia.hoje {
@@ -804,7 +992,8 @@ li.mudando-de-area.saindo {
   min-height: 44px;
   padding: 4px 8px 4px 0;
   text-align: left;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--cor);
 }
@@ -829,6 +1018,7 @@ li.mudando-de-area.saindo {
   padding: 0 12px 0 4px;
   border-radius: 999px;
   font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -971,6 +1161,7 @@ li.mudando-de-area.saindo {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.05;
+  font-variant-numeric: tabular-nums;
 }
 
 .cel.num small {
@@ -990,8 +1181,10 @@ li.mudando-de-area.saindo {
 
 .grupo-titulo {
   padding: 12px 16px 4px;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .grupo.atrasado .grupo-titulo {
@@ -1051,7 +1244,9 @@ li.mudando-de-area.saindo {
 
 .tarefa-sub {
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -1130,7 +1325,8 @@ li.mudando-de-area.saindo {
 .painel-data {
   padding: 2px 16px 12px;
   color: var(--texto-2);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .painel-data::first-letter {
@@ -1162,6 +1358,8 @@ li.mudando-de-area.saindo {
   font-size: 26px;
   line-height: 1;
   color: var(--texto);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .painel-rotina {
@@ -1169,12 +1367,16 @@ li.mudando-de-area.saindo {
   gap: 4px;
   min-width: 0;
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .painel-rotina small {
   font-size: 13px;
+  line-height: 18px;
+  letter-spacing: 0;
   font-weight: 400;
   color: var(--texto-2);
 }
@@ -1203,12 +1405,16 @@ li.mudando-de-area.saindo {
   background: var(--sup-1);
   text-align: left;
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
 .painel-contador b {
   font-size: 22px;
+  line-height: 28px;
   color: var(--texto);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 /* ---------------------------------------------------------------- folhas */
@@ -1232,18 +1438,29 @@ dialog.folha::backdrop {
 }
 
 dialog.folha[open] {
-  animation: subir 0.18s ease-out;
+  animation: subir var(--mola-folha-ms) var(--mola-folha);
 }
 
-@keyframes subir {
+/* A folha sobe da borda de baixo, como no iPhone, e o véu escurece junto. */
+dialog.folha[open]::backdrop {
+  animation: aparecer var(--mola-folha-ms, 485ms) var(--mola-folha, ease-out);
+}
+
+@keyframes aparecer {
   from {
-    transform: translateY(24px);
     opacity: 0;
   }
 }
 
+@keyframes subir {
+  from {
+    transform: translateY(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  dialog.folha[open] {
+  dialog.folha[open],
+  dialog.folha[open]::backdrop {
     animation: none;
   }
 
@@ -1436,7 +1653,9 @@ dialog.folha.arrastando {
 
 .folha-titulo {
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -1449,6 +1668,7 @@ dialog.folha.arrastando {
   display: grid;
   gap: 6px;
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -1461,7 +1681,6 @@ dialog.folha.arrastando {
   background: var(--campo);
   color: var(--texto);
   font: inherit;
-  font-size: 16px;
 }
 
 .entrada:focus {
@@ -1482,6 +1701,7 @@ textarea.editor {
 
 .dica {
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
@@ -1564,7 +1784,6 @@ textarea.editor {
   min-height: 48px;
   padding: 0 4px;
   text-align: left;
-  font-size: 16px;
 }
 
 /* Marca da opção ligada ou escolhida. */
@@ -1607,6 +1826,8 @@ textarea.editor {
 .segmento {
   min-height: 40px;
   border-radius: 9px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--texto-2);
 }
