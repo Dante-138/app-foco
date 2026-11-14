@@ -1676,3 +1676,25 @@ textarea.editor {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Painel: rótulo "Agora" ou "Depois" no fim da linha do item, e as sequências em risco. */
+.painel-rotulo {
+  flex: none;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--acento);
+}
+
+.painel-risco .rotina-texto {
+  color: var(--cor);
+  font-weight: 500;
+}
+
+.painel-dias {
+  flex: none;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}

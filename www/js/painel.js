@@ -3,14 +3,17 @@
 // leva para a aba de cada coisa. Não guarda nada próprio: lê os mesmos dados das abas.
 
 import { estado, marcasDeHoje } from './store.js';
-import { hoje } from './nucleo/datas.js';
-import { resumoDoDia } from './nucleo/painel.js';
+import { agoraLocal, hoje } from './nucleo/datas.js';
+import { COR_PADRAO, corValida } from './nucleo/paleta.js';
+import { PROXIMOS_DA_ROTINA, resumoDoDia } from './nucleo/painel.js';
 import { rotuloData } from './nucleo/prazos.js';
 import { h, svg, icone, estadoVazio } from './ui.js';
 import { rotinas, alternarItemDaRotina } from './rotinas.js';
 import { tarefas, concluirTarefa } from './tarefas.js';
 
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
 const irPara = (aba) => document.dispatchEvent(new CustomEvent('foco:ir-para-aba', { detail: aba }));
 
@@ -45,6 +48,78 @@ function contador(rotulo, valor, aba) {
   );
 }
 
+// Linha de item da rotina, que marca ali mesmo. rotulo: "Agora" ou "Depois", quando houver.
+function linhaDoItem(rotina, item, rotulo) {
+  return h(
+    'li',
+    {},
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'rotina-item',
+        role: 'checkbox',
+        'aria-checked': 'false',
+        onclick: () => alternarItemDaRotina(rotina, item),
+      },
+      h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
+      item.hora ? h('span', { class: 'hora' }, item.hora) : null,
+      h('span', { class: 'rotina-texto' }, item.texto),
+      rotulo ? h('span', { class: 'painel-rotulo' }, rotulo) : null,
+    ),
+  );
+}
+
+// O item de agora e o de depois (pelo horário) vêm primeiro, com rótulo; os próximos que faltam,
+// na ordem da rotina, completam a lista.
+function itensDoPainel(rotina, resumo) {
+  const marcados = [
+    [resumo.agora, 'Agora'],
+    [resumo.depois, 'Depois'],
+  ].filter(([item]) => item);
+  const comRotulo = new Set(marcados.map(([item]) => item.id));
+  const resto = resumo.proximos.filter((item) => !comRotulo.has(item.id));
+  const linhas = [
+    ...marcados.map(([item, rotulo]) => linhaDoItem(rotina, item, rotulo)),
+    ...resto
+      .slice(0, Math.max(0, PROXIMOS_DA_ROTINA - marcados.length))
+      .map((item) => linhaDoItem(rotina, item)),
+  ];
+  if (!linhas.length) return h('p', { class: 'painel-pronto' }, 'Rotina concluída hoje.');
+  return h('ul', {}, linhas);
+}
+
+// Sequências que quebram se o dia acabar sem marca. Tocar leva para a aba Hábitos.
+function blocoDosRiscos(emRisco) {
+  if (!emRisco.length) return null;
+  return h(
+    'section',
+    { class: 'cartao painel-bloco' },
+    h('h3', { class: 'grupo-titulo' }, 'Sequências em risco'),
+    h(
+      'ul',
+      {},
+      emRisco.map(({ habito, dias }) =>
+        h(
+          'li',
+          {},
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'rotina-item painel-risco',
+              style: { '--cor': corCss(habito.cor) },
+              onclick: () => irPara('habitos'),
+            },
+            h('span', { class: 'rotina-texto' }, habito.nome),
+            h('span', { class: 'painel-dias' }, `${dias} dias`),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 function blocoDaRotina(rotina, resumo) {
   if (!rotina) {
     return h(
@@ -64,31 +139,7 @@ function blocoDaRotina(rotina, resumo) {
       anel(fracao, porcento),
       h('p', { class: 'painel-rotina' }, rotina.nome, h('small', {}, `${resumo.feitos} de ${resumo.total}`)),
     ),
-    resumo.proximos.length
-      ? h(
-          'ul',
-          {},
-          resumo.proximos.map((item) =>
-            h(
-              'li',
-              {},
-              h(
-                'button',
-                {
-                  type: 'button',
-                  class: 'rotina-item',
-                  role: 'checkbox',
-                  'aria-checked': 'false',
-                  onclick: () => alternarItemDaRotina(rotina, item),
-                },
-                h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
-                item.hora ? h('span', { class: 'hora' }, item.hora) : null,
-                h('span', { class: 'rotina-texto' }, item.texto),
-              ),
-            ),
-          ),
-        )
-      : h('p', { class: 'painel-pronto' }, 'Rotina concluída hoje.'),
+    itensDoPainel(rotina, resumo),
     h(
       'button',
       { type: 'button', class: 'botao painel-ver', onclick: () => irPara('rotinas') },
@@ -155,6 +206,7 @@ function render(raiz) {
     registros: estado.registros,
     tarefas: estado.tarefas,
     dia,
+    hora: agoraLocal().slice(11),
   });
   const { tarefas: deHoje } = resumo;
 
@@ -173,6 +225,7 @@ function render(raiz) {
         'tarefas',
       ),
     ),
+    blocoDosRiscos(resumo.habitos.emRisco),
     blocoDasTarefas(deHoje, dia),
   );
 }

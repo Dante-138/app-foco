@@ -2176,3 +2176,67 @@ test('fonte: a Inter vem do próprio app e carrega com a política de segurança
   assert.match(fonte.corpo, /^"?Inter"?,/);
   assert.deepEqual(erros, []);
 });
+
+test('painel: item de agora e de depois pelo horário, e sequências em risco', async (t) => {
+  const diaSP = (deslocamento) =>
+    new Date(Date.now() + deslocamento * 86_400_000).toLocaleDateString('sv-SE', {
+      timeZone: 'America/Sao_Paulo',
+    });
+  const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'painel',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Dia',
+        itens: [item('i1', 'Beber água'), item('i2', 'Acordar', '00:00'), item('i3', 'Dormir', '23:59')],
+      },
+    ],
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'verde', tipo: 'simnao' },
+    ],
+    // Leitura: 2 dias seguidos até ontem e nada hoje. Água: já feita hoje.
+    registros: {
+      h1: { [diaSP(-1)]: 'feito', [diaSP(-2)]: 'feito' },
+      h2: { [diaSP(-1)]: 'feito', [diaSP(0)]: 'feito' },
+    },
+    listas: [{ id: 'l', nome: 'Pessoal' }],
+    tarefas: [],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+
+  await visivel(pagina.getByRole('img', { name: '0% da rotina feita' }));
+  const linhas = () =>
+    pagina
+      .locator('.painel-topo + ul .rotina-item')
+      .evaluateAll((botoes) =>
+        botoes.map((b) => [
+          b.querySelector('.rotina-texto').textContent,
+          b.querySelector('.painel-rotulo')?.textContent ?? '',
+        ]),
+      );
+  assert.deepEqual(await linhas(), [
+    ['Acordar', 'Agora'],
+    ['Dormir', 'Depois'],
+    ['Beber água', ''],
+  ]);
+
+  // Marcar o de agora: o de depois continua com rótulo.
+  await pagina.getByRole('checkbox', { name: /Acordar/ }).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.painel-topo + ul .rotina-item').length === 2,
+  );
+  assert.deepEqual(await linhas(), [
+    ['Dormir', 'Depois'],
+    ['Beber água', ''],
+  ]);
+
+  // Sequências em risco: só a Leitura, com 2 dias; tocar leva aos Hábitos.
+  await visivel(pagina.getByRole('heading', { name: 'Sequências em risco' }));
+  assert.deepEqual(await pagina.locator('.painel-risco').allTextContents(), ['Leitura2 dias']);
+  await pagina.locator('.painel-risco').click();
+  await visivel(pagina.getByRole('heading', { name: 'Hábitos', level: 1 }));
+  assert.deepEqual(erros, []);
+});
