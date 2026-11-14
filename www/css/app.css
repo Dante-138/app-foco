@@ -47,6 +47,64 @@
      --safe-area-inset-*; onde ele não existe, vale o env() do navegador. */
   --topo-seguro: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --base-segura: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+
+  /* Movimento: molas geradas por tools/mola.mjs (não editar à mão; rodar o script de novo).
+     Estado: 307 ms com um pulo leve. Folha e troca de tela: 485 ms, sem pulo. */
+  --mola-estado-ms: 307ms;
+  --mola-estado: linear(
+    0,
+    0.004 1.1%,
+    0.025 2.7%,
+    0.058 4.3%,
+    0.102 6%,
+    0.188 8.7%,
+    0.418 15.2%,
+    0.509 17.9%,
+    0.608 21.2%,
+    0.695 24.5%,
+    0.767 27.7%,
+    0.827 31%,
+    0.875 34.2%,
+    0.912 37.5%,
+    0.945 41.3%,
+    0.971 45.7%,
+    0.989 50.5%,
+    1 56%,
+    1.006 67.9%,
+    1
+  );
+  --mola-folha-ms: 485ms;
+  --mola-folha: linear(
+    0,
+    0.004 1%,
+    0.021 2.4%,
+    0.048 3.8%,
+    0.083 5.2%,
+    0.166 7.9%,
+    0.362 13.7%,
+    0.46 16.8%,
+    0.558 20.3%,
+    0.635 23.4%,
+    0.708 26.8%,
+    0.768 30.2%,
+    0.817 33.7%,
+    0.86 37.5%,
+    0.899 41.9%,
+    0.929 46.7%,
+    0.953 52.2%,
+    0.971 58.4%,
+    0.983 65.3%,
+    0.991 73.5%,
+    1
+  );
+}
+
+/* WebView sem linear(): a mesma desaceleração, sem o pulo. */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --mola-estado: cubic-bezier(0.2, 0, 0, 1);
+    --mola-folha: cubic-bezier(0.2, 0, 0, 1);
+  }
 }
 
 /* Tema claro: cartões brancos sobre cinza bem claro. */
@@ -303,11 +361,11 @@ ul {
 
 /* Troca de aba: o conteúdo novo entra do lado para onde a pessoa foi. */
 #conteudo.entra-da-direita {
-  animation: entrar-da-direita 0.16s ease-out;
+  animation: entrar-da-direita var(--mola-folha-ms) var(--mola-folha);
 }
 
 #conteudo.entra-da-esquerda {
-  animation: entrar-da-esquerda 0.16s ease-out;
+  animation: entrar-da-esquerda var(--mola-folha-ms) var(--mola-folha);
 }
 
 @keyframes entrar-da-direita {
@@ -558,7 +616,8 @@ ul {
   height: 100%;
   border-radius: 2px;
   background: var(--acento);
-  transition: width 0.2s ease-out;
+  transform-origin: left;
+  transition: transform var(--mola-estado-ms) var(--mola-estado);
 }
 
 .rotina-secao {
@@ -1330,18 +1389,29 @@ dialog.folha::backdrop {
 }
 
 dialog.folha[open] {
-  animation: subir 0.18s ease-out;
+  animation: subir var(--mola-folha-ms) var(--mola-folha);
 }
 
-@keyframes subir {
+/* A folha sobe da borda de baixo, como no iPhone, e o véu escurece junto. */
+dialog.folha[open]::backdrop {
+  animation: aparecer var(--mola-folha-ms, 485ms) var(--mola-folha, ease-out);
+}
+
+@keyframes aparecer {
   from {
-    transform: translateY(24px);
     opacity: 0;
   }
 }
 
+@keyframes subir {
+  from {
+    transform: translateY(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  dialog.folha[open] {
+  dialog.folha[open],
+  dialog.folha[open]::backdrop {
     animation: none;
   }
 
