@@ -1,7 +1,7 @@
 // Resumo do dia para a aba Painel: rotina aberta, hábitos e tarefas de hoje.
 // Lógica pura: recebe os dados e a data, devolve só números e listas curtas.
 
-import { cumprido } from './habito-calculo.js';
+import { cumprido, valorDoDia } from './habito-calculo.js';
 import { porPrazo } from './prazos.js';
 
 export const PROXIMOS_DA_ROTINA = 3;
@@ -10,11 +10,11 @@ export const TAREFAS_NO_PAINEL = 5;
 // rotina: a rotina aberta (ou null); marcadas: Set com os ids marcados hoje nela.
 // dia: hoje, 'AAAA-MM-DD'.
 //   rotina:  itens feitos e total, e os próximos itens que faltam, na ordem da rotina
-//   habitos: os não arquivados; pular o dia tira o hábito da conta
+//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito) tira da conta
 //   tarefas: pendentes com prazo até hoje (as atrasadas primeiro), e quantas estão atrasadas
 export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia }) {
   const itens = rotina ? rotina.itens.filter((item) => item.tipo === 'item') : [];
-  const contam = habitos.filter((x) => !x.arquivado && registros[x.id]?.[dia] !== 'pulado');
+  const contam = habitos.filter((x) => !x.arquivado && valorDoDia(x, registros[x.id], dia) !== 'pulado');
   const paraHoje = tarefas.filter((t) => !t.feita && t.prazo && t.prazo <= dia).sort(porPrazo);
 
   return {

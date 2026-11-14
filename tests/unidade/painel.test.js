@@ -68,3 +68,18 @@ test('tarefas: pendentes com prazo até hoje, atrasadas primeiro, até o limite'
     ['atrasada', 'hoje à tarde', 'hoje sem hora', 'mais 0', 'mais 1'],
   );
 });
+
+test('hábitos: fora dos dias da semana do hábito, ele sai da conta do dia', () => {
+  const habitos = [
+    { id: 'uteis', tipo: 'simnao', diasDaSemana: [1, 2, 3, 4, 5] },
+    { id: 'sabado', tipo: 'simnao', diasDaSemana: [6] },
+  ];
+  // 14/11/2026 é sábado.
+  const r = resumoDoDia({
+    ...vazio,
+    habitos,
+    registros: { sabado: { '2026-11-14': 'feito' } },
+    dia: '2026-11-14',
+  });
+  assert.deepEqual(r.habitos, { feitos: 1, total: 1 });
+});
