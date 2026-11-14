@@ -12,7 +12,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   ligado a um hábito: marcar o item marca o hábito no dia.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
-  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados.
+  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um
+  dia abre a folha dele: o estado (feito, folga ou vazio; quantidade, no numérico) e uma nota.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
@@ -21,7 +22,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo.
-- **Gestos**: deslizar o dedo para o lado troca de aba.
+- **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
+  Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 - **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
   O app confere o que foi colado e pede confirmação antes de substituir.
@@ -92,6 +94,8 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - No fim o script apaga do Docker tudo o que criou (imagem, volume e construtor de build) e
   nada além disso. Para vários builds seguidos, use `-Manter` e termine com `-Limpar`.
 - `-Simular` mostra os comandos sem executar.
+- O APK leva um carimbo com a versão, o commit e a data do build, mostrado no fim de Ajustes.
+  É o que identifica o app instalado ao relatar um defeito.
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
@@ -101,12 +105,17 @@ Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate
 A regra vale também para o dono do repositório. O portão confere, nesta ordem:
 
 1. **Mensagens de commit e título do PR** no padrão Conventional Commits, com até 72 caracteres
-   e sem linha de coautoria.
+   e sem linha de coautoria. O job `Título` repete a conferência do título e da descrição
+   quando o PR é editado: no merge por squash, são eles que viram o commit na `main`. A única exceção é a linha de assinatura que o
+   Dependabot escreve nos commits dele. As atualizações que ele propõe (npm e GitHub Actions,
+   uma vez por semana) estão em `.github/dependabot.yml`.
 2. **Lint sem nenhum aviso**, e sem comentário de exceção: o `eslint-disable` é proibido.
    Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
 3. **Formatação** conferida pelo Prettier.
 4. **Testes de unidade** com cobertura de 100% de linhas, desvios e funções do núcleo.
-   Um módulo novo no núcleo sem teste reprova.
+   Um módulo novo no núcleo sem teste reprova. Parte deles é por propriedade (fast-check): centenas
+   de dados gerados, muitos malformados, conferem que ler os dados salvos nunca lança exceção,
+   que validar de novo não muda nada e que a migração e o backup não perdem dados.
 5. **Testes de ponta a ponta** em um Chrome real: os fluxos das três abas, o tema, dados
    salvos com problema, duas abas abertas e a política de segurança. Qualquer erro no console
    da página reprova.
@@ -116,6 +125,13 @@ O merge é sempre por squash: cada pull request vira um commit na `main`, com o 
 Todo pull request tem a `main` como base: uma mudança por vez, sem pilha de PRs. O job `Base`
 reprova o PR que aponta para outra branch, inclusive quando a base é trocada depois de aberto.
 Mesclar em outra branch não passa pela proteção da `main`, e a mudança fica fora dela.
+
+Fora do portão, o workflow `Análise` roda em todo PR, na `main` e uma vez por semana:
+
+- **CodeQL**, a análise estática do GitHub, no JavaScript do app e nos workflows. Os resultados
+  ficam na aba Security do repositório.
+- **Dependências**: reprova o PR que traz dependência com vulnerabilidade conhecida.
+- **Workflows**: o actionlint confere a sintaxe e os scripts de shell dos próprios workflows.
 
 ## Estrutura
 

@@ -627,6 +627,55 @@ test('rotina: "Excluir itens marcados" e "Desmarcar todos" no menu, como no Keep
   assert.deepEqual(erros, []);
 });
 
+test('rotina: depois de "Excluir itens marcados", o Desfazer devolve os itens no lugar e marcados', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const textos = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const rotinaSalva = async () => {
+    const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+    return {
+      itens: salvo.rotinas[0].itens.map((i) => i.texto),
+      marcas: Object.values(salvo.marcasRotina.porRotina)[0]?.length ?? 0,
+    };
+  };
+  const excluirMarcados = async () => {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, 'Excluir itens marcados').click();
+    await botao(pagina, 'Excluir').click();
+    await visivel(pagina.getByText('2 itens excluídos'));
+  };
+
+  await criarRotinaDaManha(pagina);
+  const antes = await rotinaSalva();
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
+  await visivel(botao(pagina, '2 itens marcados'));
+
+  await excluirMarcados();
+  await visivel(pagina.getByText('0 de 2 hoje'));
+  assert.deepEqual(await rotinaSalva(), {
+    itens: ['ACORDAR', 'Beber água', 'Arrumar a cama', 'SAIR'],
+    marcas: 0,
+  });
+
+  // Desfazer: os dois voltam para a seção de antes, marcados como estavam, e o aviso sai.
+  await botao(pagina, 'Desfazer').click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await textos('.area-marcados'), ['Levantar', 'Pegar a chave']);
+  assert.deepEqual(await textos('.area-pendentes'), ['Beber água', 'Arrumar a cama']);
+  assert.deepEqual(await rotinaSalva(), { itens: antes.itens, marcas: 2 });
+  assert.equal(await pagina.locator('.aviso').count(), 0);
+
+  // Sem tocar em Desfazer, o aviso some sozinho em uns 5 segundos e a exclusão fica.
+  await excluirMarcados();
+  await pagina.waitForFunction(() => !document.querySelector('.aviso'), null, { timeout: 9000 });
+  assert.equal(await botao(pagina, 'Desfazer').count(), 0);
+  assert.deepEqual(await rotinaSalva(), {
+    itens: ['ACORDAR', 'Beber água', 'Arrumar a cama', 'SAIR'],
+    marcas: 0,
+  });
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: na edição, a alça arrasta um item para outra seção e uma seção com o bloco inteiro', async (t) => {
   const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
   const secao = (id, texto) => ({ id, tipo: 'secao', texto, hora: null, habitoId: null });
@@ -890,6 +939,62 @@ test('hábito: a edição mostra a pontuação e as sequências, e o anel acompa
   assert.deepEqual(erros, []);
 });
 
+test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazio e quantidade)', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'habitos',
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'verde', tipo: 'numero', unidade: 'copos', meta: 8 },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const segurar = (alvo) => alvo.click({ delay: 800 });
+  const opcao = (nome) => pagina.getByRole('radio', { name: nome, exact: true });
+  const marcada = (nome) => opcao(nome).getAttribute('aria-checked');
+  const registros = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).registros;
+
+  // Segurar, escolher Feito e escrever a nota: um Salvar grava os dois.
+  await segurar(botao(pagina, 'Leitura, hoje: não feito'));
+  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
+  assert.equal(await marcada('Vazio'), 'true');
+  await opcao('Feito').click();
+  await pagina.getByLabel('Nota do dia').fill('Li no ônibus');
+  await botao(pagina, 'Salvar').click();
+  const feita = botao(pagina, 'Leitura, hoje: feito, com nota');
+  await visivel(feita);
+  assert.ok((await feita.evaluate((el) => [...el.classList])).includes('com-nota'));
+
+  // Folga, mantendo a nota. A opção atual vem marcada.
+  await segurar(feita);
+  assert.equal(await marcada('Feito'), 'true');
+  await opcao('Folga').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: pulado, com nota'));
+
+  // Vazio apaga o registro do dia; a nota fica.
+  await segurar(botao(pagina, 'Leitura, hoje: pulado, com nota'));
+  assert.equal(await marcada('Folga'), 'true');
+  await opcao('Vazio').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: não feito, com nota'));
+  assert.deepEqual(Object.keys((await registros()).h1 ?? {}), []);
+
+  // Hábito numérico: quantidade no lugar de Feito. Texto que não é número não salva.
+  await segurar(botao(pagina, 'Água, hoje: 0 copos'));
+  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  assert.equal(await marcada('Vazio'), 'true');
+  await opcao('Quantidade').click();
+  await pagina.getByLabel('Quantidade (copos)').fill('muitos');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  await pagina.getByLabel('Quantidade (copos)').fill('8');
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Água, hoje: 8 copos'));
+  assert.deepEqual(Object.values((await registros()).h2), [8]);
+  assert.deepEqual(erros, []);
+});
+
 test('hábito: segurar a célula abre a nota do dia, sem mudar a marca; o ponto mostra que há nota', async (t) => {
   const { pagina, erros } = await abrir(t);
   const segurar = (alvo) => alvo.click({ delay: 800 });
@@ -900,7 +1005,7 @@ test('hábito: segurar a célula abre a nota do dia, sem mudar a marca; o ponto 
   await botao(pagina, 'Salvar').click();
 
   await segurar(botao(pagina, 'Leitura, hoje: não feito'));
-  await visivel(pagina.getByText('Nota: Leitura (hoje)'));
+  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
   await pagina.getByLabel('Nota do dia').fill('  Dia de viagem  ');
   await botao(pagina, 'Salvar').click();
 
@@ -1245,6 +1350,13 @@ test('tarefas: mover a lista para os lados muda a ordem na faixa do topo', async
     JSON.parse(await lerSalvo(pagina, CHAVE)).listas.map((l) => l.nome),
     ['Trabalho', 'Contas', 'Faculdade'],
   );
+  assert.deepEqual(erros, []);
+});
+
+test('ajustes: mostra a versão; fora de um build, diz que é desenvolvimento', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByText(/^Versão \d+\.\d+\.\d+ · desenvolvimento$/));
   assert.deepEqual(erros, []);
 });
 
@@ -1885,9 +1997,11 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   const { pagina, erros } = await abrir(t, { toque: true });
   await visivel(pagina.getByText('Nenhuma rotina ainda'));
 
-  // Dedo para a esquerda: vai para a aba da direita.
-  await deslizar(pagina, [400, 500], [120, 510]);
-  await esperarTitulo(pagina, 'Hábitos - Foco');
+  // A ordem da barra é a do deslize. Na primeira vez o app abre em Rotinas, a terceira.
+  const naBarra = (await pagina.locator('#abas button').allTextContents()).map((nome) => nome.trim());
+  assert.deepEqual(naBarra, ['Painel', 'Hábitos', 'Rotinas', 'Tarefas']);
+
+  // Dedo para a esquerda: vai para a aba da direita, que é a última.
   await deslizar(pagina, [400, 500], [120, 510]);
   await esperarTitulo(pagina, 'Tarefas - Foco');
 
@@ -1896,7 +2010,9 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await visivel(pagina.getByText('Nenhuma tarefa aqui'));
   assert.equal(await pagina.title(), 'Tarefas - Foco');
 
-  // Dedo para a direita: volta. A aba em que a pessoa parou fica salva.
+  // Dedo para a direita: volta uma aba por vez. A aba em que a pessoa parou fica salva.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Rotinas - Foco');
   await deslizar(pagina, [120, 500], [400, 490]);
   await esperarTitulo(pagina, 'Hábitos - Foco');
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'habitos');
@@ -1907,6 +2023,14 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await deslizar(pagina, [250, 500], [280, 500]);
   await visivel(pagina.getByText('Nenhum hábito ainda'));
   assert.equal(await pagina.title(), 'Hábitos - Foco');
+
+  // Mais um para a direita chega à primeira aba, e dali não há para onde voltar.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Painel - Foco');
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await visivel(botao(pagina, 'Painel'));
+  assert.equal(await pagina.title(), 'Painel - Foco');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'painel');
   assert.deepEqual(erros, []);
 });
 
@@ -1962,9 +2086,9 @@ test('deslizar sobre a faixa de rotinas rola a faixa e não troca de aba', async
   await pagina.waitForFunction(() => document.querySelector('.faixa').scrollLeft > 0, null, ESPERA);
   assert.equal(await pagina.title(), 'Rotinas - Foco');
 
-  // O mesmo gesto fora da faixa troca de aba.
+  // O mesmo gesto fora da faixa troca de aba: de Rotinas para a da direita, Tarefas.
   await deslizar(pagina, [400, 600], [120, 600]);
-  await esperarTitulo(pagina, 'Hábitos - Foco');
+  await esperarTitulo(pagina, 'Tarefas - Foco');
   assert.deepEqual(erros, []);
 });
 
@@ -2032,4 +2156,23 @@ test('política de segurança: HTML em texto e conexão de rede são bloqueados'
     erros.some((e) => /Content Security Policy/i.test(e)),
     erros.join(' | '),
   );
+});
+
+test('fonte: a Inter vem do próprio app e carrega com a política de segurança', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const fonte = await pagina.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      carregou: [...document.fonts].some(
+        (f) => f.family.replaceAll('"', '') === 'Inter' && f.status === 'loaded',
+      ),
+      corpo: getComputedStyle(document.body).fontFamily,
+    };
+  });
+
+  assert.equal(fonte.carregou, true);
+  assert.match(fonte.corpo, /^"?Inter"?,/);
+  assert.deepEqual(erros, []);
 });

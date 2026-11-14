@@ -11,10 +11,15 @@
 // Variável de ambiente opcional TITULO_PR: título do pull request, conferido
 // pela mesma regra (com squash merge, é ele que vira o commit na main).
 //
+// Uso só para o pull request: node tools/verificar-commits.mjs --pr
+//   Confere TITULO_PR como assunto e CORPO_PR (a descrição) como corpo: com squash merge, a
+//   descrição vira o corpo do commit na main. Não lê commit nenhum.
+//
 // Regras:
 // 1. Assunto no padrão Conventional Commits: tipo(escopo opcional): descrição
 // 2. Assunto com no máximo 72 caracteres e sem ponto final
-// 3. Nenhuma linha de coautoria ou de "gerado por" na mensagem
+// 3. Nenhuma linha de coautoria ou de "gerado por" na mensagem (única exceção: a assinatura
+//    que o Dependabot põe nos commits dele; ver ASSINATURA_DO_DEPENDABOT)
 
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -38,17 +43,29 @@ export function problemasDoAssunto(assunto) {
   return problemas;
 }
 
+// Exceção única da regra 3: o Dependabot assina os commits dele com uma linha "Signed-off-by"
+// que ele mesmo escreve. Essa linha, e só ela, é aceita quando o autor do commit é o Dependabot
+// (o nome e o e-mail do robô no GitHub). Coautoria, assinatura de outra pessoa e "gerado por"
+// continuam reprovados para todo mundo, inclusive para ele.
+const AUTOR_DEPENDABOT = /^dependabot\[bot\] <\d+\+dependabot\[bot\]@users\.noreply\.github\.com>$/;
+const ASSINATURA_DO_DEPENDABOT = /^Signed-off-by: dependabot\[bot\] <[^<>\n]*>[ \t]*$/gm;
+
+export const ehDependabot = (autor) => AUTOR_DEPENDABOT.test(autor);
+
 // Devolve a lista de problemas da mensagem inteira (assunto + corpo).
-export function problemasDaMensagem(mensagem) {
+// autor: "Nome <e-mail>" de quem fez o commit; só muda o resultado quando é o Dependabot.
+export function problemasDaMensagem(mensagem, autor = '') {
   const [assunto = ''] = mensagem.split('\n');
   const problemas = problemasDoAssunto(assunto.trim());
-  if (AUTORIA_DE_TERCEIRO.test(mensagem)) problemas.push('contém linha de coautoria ou de "gerado por"');
+  const conferida = ehDependabot(autor) ? mensagem.replace(ASSINATURA_DO_DEPENDABOT, '') : mensagem;
+  if (AUTORIA_DE_TERCEIRO.test(conferida)) problemas.push('contém linha de coautoria ou de "gerado por"');
   return problemas;
 }
 
 function commitsDesde(base, ponta) {
-  // %x00 separa os commits; %x01 separa o hash da mensagem.
-  const saida = execFileSync('git', ['log', '--no-merges', '--format=%h%x01%B%x00', `${base}..${ponta}`], {
+  // %x00 separa os commits; %x01 separa o hash, o autor ("Nome <e-mail>") e a mensagem.
+  const formato = '--format=%h%x01%an <%ae>%x01%B%x00';
+  const saida = execFileSync('git', ['log', '--no-merges', formato, `${base}..${ponta}`], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'], // o erro do git vira a mensagem de principal()
   });
@@ -57,13 +74,37 @@ function commitsDesde(base, ponta) {
     .map((bloco) => bloco.trim())
     .filter(Boolean)
     .map((bloco) => {
-      const [hash, mensagem] = bloco.split('\x01');
-      return { hash, mensagem: mensagem.trim() };
+      const [hash, autor, mensagem] = bloco.split('\x01');
+      return { hash, autor, mensagem: mensagem.trim() };
     });
+}
+
+function relatar(itens) {
+  const reprovados = itens.filter((item) => item.problemas.length);
+  for (const item of reprovados) {
+    console.error(`REPROVADO  ${item.rotulo}`);
+    for (const problema of item.problemas) console.error(`           - ${problema}`);
+  }
+  console.log(`${itens.length} mensagem(ns) conferida(s), ${reprovados.length} reprovada(s).`);
+  return reprovados.length ? 1 : 0;
+}
+
+// Modo --pr: só o título e a descrição do pull request.
+function conferirPr() {
+  const titulo = (process.env.TITULO_PR ?? '').trim();
+  if (!titulo) {
+    console.error('Modo --pr: a variável TITULO_PR está vazia.');
+    return 2;
+  }
+  const corpo = process.env.CORPO_PR ?? '';
+  return relatar([
+    { rotulo: `título do PR: ${titulo}`, problemas: problemasDaMensagem(`${titulo}\n\n${corpo}`) },
+  ]);
 }
 
 function principal() {
   const [base, ponta = 'HEAD'] = process.argv.slice(2);
+  if (base === '--pr') return conferirPr();
   if (!base) {
     console.error('Uso: node tools/verificar-commits.mjs <base> [<ponta>]   (exemplo: origin/main)');
     return 2;
@@ -79,9 +120,9 @@ function principal() {
     return 2;
   }
 
-  const itens = commits.map(({ hash, mensagem }) => ({
+  const itens = commits.map(({ hash, autor, mensagem }) => ({
     rotulo: `${hash} ${mensagem.split('\n')[0]}`,
-    problemas: problemasDaMensagem(mensagem),
+    problemas: problemasDaMensagem(mensagem, autor),
   }));
 
   const tituloDoPr = process.env.TITULO_PR;
@@ -89,13 +130,7 @@ function principal() {
     itens.push({ rotulo: `título do PR: ${tituloDoPr}`, problemas: problemasDoAssunto(tituloDoPr.trim()) });
   }
 
-  const reprovados = itens.filter((item) => item.problemas.length);
-  for (const item of reprovados) {
-    console.error(`REPROVADO  ${item.rotulo}`);
-    for (const problema of item.problemas) console.error(`           - ${problema}`);
-  }
-  console.log(`${itens.length} mensagem(ns) conferida(s), ${reprovados.length} reprovada(s).`);
-  return reprovados.length ? 1 : 0;
+  return relatar(itens);
 }
 
 // Executado direto pela linha de comando (e não importado por um teste).

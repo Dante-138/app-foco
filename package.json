@@ -23,7 +23,8 @@
     "@eslint/js": "^10.0.1",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/tap-runner": "^10.1.1",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
+    "fast-check": "^4.10.2",
     "globals": "^17.14.0",
     "playwright-core": "^1.65.0",
     "prettier": "^3.10.1"
@@ -32,5 +33,12 @@
     "@capacitor/android": "^8.6.2",
     "@capacitor/core": "^8.6.2",
     "@capacitor/local-notifications": "^8.3.1"
+  },
+  "overrides": {
+    "@stryker-mutator/tap-runner": {
+      "glob": "14.0.6"
+    },
+    "minimatch": "11.0.8",
+    "qs": "6.16.1"
   }
 }
