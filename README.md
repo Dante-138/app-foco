@@ -188,5 +188,5 @@ tools/                  servidor de desenvolvimento e portão de commits
 
 ## Próximos passos
 
-O roteiro está nas [issues](https://github.com/Dante-138/foco/issues) e nos
-[milestones](https://github.com/Dante-138/foco/milestones) do repositório.
+O roteiro está nas [issues](https://github.com/Dante-138/app-foco/issues) e nos
+[milestones](https://github.com/Dante-138/app-foco/milestones) do repositório.
