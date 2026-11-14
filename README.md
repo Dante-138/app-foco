@@ -12,7 +12,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   ligado a um hábito: marcar o item marca o hábito no dia.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
-  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados.
+  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um
+  dia abre a folha dele: o estado (feito, folga ou vazio; quantidade, no numérico) e uma nota.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
@@ -21,7 +22,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo.
-- **Gestos**: deslizar o dedo para o lado troca de aba.
+- **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
+  Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 - **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
   O app confere o que foi colado e pede confirmação antes de substituir.
