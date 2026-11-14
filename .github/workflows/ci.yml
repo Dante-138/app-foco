@@ -89,3 +89,9 @@ jobs:
       - name: Compilar o APK de depuração
         working-directory: android
         run: sh ./gradlew --no-daemon --console=plain assembleDebug
+
+      # O mesmo build que o workflow Release faz, sem assinar: confere que o modo sem assinatura
+      # continua montando antes de uma release depender dele.
+      - name: Compilar o APK de release sem assinatura
+        working-directory: android
+        run: sh ./gradlew --no-daemon --console=plain assembleRelease -Pfoco.semAssinatura=true

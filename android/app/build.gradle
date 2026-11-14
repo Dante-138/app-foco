@@ -16,8 +16,14 @@ if (arquivoDeAssinatura) {
 }
 
 // Sem assinatura, o Gradle geraria um APK de release que não instala. Melhor falhar cedo.
+// Exceção: -Pfoco.semAssinatura=true gera o APK sem assinar de propósito. É o build do CI da
+// release, que não tem nenhum segredo; outro job assina o arquivo depois (zipalign e apksigner).
+def semAssinatura = providers.gradleProperty('foco.semAssinatura').orNull == 'true'
 def pediuRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
-if (pediuRelease && !arquivoDeAssinatura) {
+if (semAssinatura && arquivoDeAssinatura) {
+    throw new GradleException('-Pfoco.semAssinatura=true e -Pfoco.assinatura não andam juntos')
+}
+if (pediuRelease && !arquivoDeAssinatura && !semAssinatura) {
     throw new GradleException('Build de release exige -Pfoco.assinatura=<arquivo de propriedades da assinatura>')
 }
 

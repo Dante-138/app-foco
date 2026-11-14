@@ -107,9 +107,10 @@ A versão sai dos commits (Conventional Commits), pelo [release-please](https://
    `CHANGELOG.md` (Novidades, Correções, Desempenho). Antes da versão 1.0, `feat` sobe o número
    do meio e `fix` o último.
 2. Esse PR segue o fluxo de qualquer outro: revisão, sai do rascunho, merge.
-3. No merge saem a tag `vX.Y.Z` e a release, e o job `APK` anexa `foco-vX.Y.Z.apk`, assinado
-   com a mesma chave fixa, com uma atestação de proveniência (SLSA). Para conferir que o APK
-   saiu deste repositório, deste commit:
+3. No merge saem a tag `vX.Y.Z` e a release. O job `Construir APK` compila sem assinar e sem
+   nenhum segredo; o job `Assinar e publicar o APK` alinha e assina com a chave fixa, reprova se
+   o certificado não for o de `android/assinatura-sha256.txt`, atesta a proveniência (SLSA) e
+   anexa `foco-vX.Y.Z.apk`. Para conferir que o APK saiu deste repositório, deste commit:
 
    ```bash
    gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/app-foco
@@ -155,7 +156,20 @@ Sem eles o workflow só avisa e termina verde. Nada disso é lido por agente nen
    gh secret set RELEASE_TOKEN --repo Dante-138/app-foco
    ```
 
-4. Conferir: o próximo merge na `main` abre o PR de release. Quando o token vencer, o workflow
+4. **Impressão digital do certificado**, uma vez: o job que assina reprova se o APK sair com
+   outra chave, e compara com a linha que você pôs em `android/assinatura-sha256.txt` (a
+   impressão digital é pública). Para pegar a sua, num APK já instalado e assinado com a
+   chave fixa:
+
+   ```bash
+   apksigner verify --print-certs saida/foco-debug.apk
+   ```
+
+   Copie o valor de `certificate SHA-256 digest` para o arquivo, numa linha sem `#`, e faça um PR.
+   Enquanto o arquivo não tiver uma impressão digital válida, a release sai sem APK e o job
+   falha com essa mensagem.
+
+5. Conferir: o próximo merge na `main` abre o PR de release. Quando o token vencer, o workflow
    falha no passo do release-please; é só criar outro e repetir o passo 3.
 
 ## Portão de qualidade
