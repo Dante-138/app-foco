@@ -6,12 +6,12 @@ import { PROBLEMA } from './nucleo/estado.js';
 import { passoDoDeslize, vizinha } from './nucleo/gesto.js';
 import { h, icone, avisar, estadoVazio } from './ui.js';
 import { rotinas } from './rotinas.js';
-import { habitos } from './habitos.js';
+import { habitos, marcarHabitoNoDia } from './habitos.js';
 import { tarefas } from './tarefas.js';
 import { painel } from './painel.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
-import { agendarSincronia } from './lembretes.js';
+import { agendarSincronia, ligarNotificacoes } from './lembretes.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
@@ -193,6 +193,16 @@ function iniciar() {
   agendarSincronia();
 
   desenhar();
+
+  // Toque em uma notificação: o botão "Feito" marca o hábito no dia do aviso, e o app abre
+  // na aba do assunto (o resumo, a revisão e a rotina levam ao Painel).
+  document.addEventListener('foco:notificacao', (e) => {
+    const { feito, tipo, dia, habitoId } = e.detail;
+    if (feito && habitoId) marcarHabitoNoDia(habitoId, dia);
+    const abaDoTipo = { tarefa: 'tarefas', habito: 'habitos' };
+    irParaAba(abaDoTipo[tipo] ?? 'painel');
+  });
+  ligarNotificacoes();
 
   if (problemaDeCarga === PROBLEMA.ILEGIVEL) {
     avisar('Os dados salvos estavam ilegíveis. Uma cópia foi guardada e o app começou do zero.');

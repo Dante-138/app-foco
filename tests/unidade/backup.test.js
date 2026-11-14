@@ -20,7 +20,16 @@ function comDados() {
     ],
     rotinaAtiva: 'r',
     habitos: [
-      { id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null, arquivado: true },
+      {
+        id: 'h',
+        nome: 'Leitura',
+        cor: 'lilas',
+        tipo: 'simnao',
+        unidade: null,
+        meta: null,
+        arquivado: true,
+        lembrete: '21:30',
+      },
     ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },
     notasHabito: { h: { '2026-11-11': 'Dia de viagem' } },

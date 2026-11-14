@@ -3,7 +3,7 @@
 
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
-import { hoje, deIso, somaDias } from './nucleo/datas.js';
+import { hoje, dataValida, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import {
@@ -17,6 +17,7 @@ import {
   sequencias,
   visiveis,
 } from './nucleo/habito-calculo.js';
+import { pedirPermissaoSeFaltar } from './lembretes.js';
 import {
   h,
   svg,
@@ -401,6 +402,9 @@ function editarHabito(habito) {
     );
   };
 
+  // Hora do aviso do hábito. Hábito ligado a um item de rotina com horário é avisado pela rotina.
+  const lembrete = h('input', { class: 'entrada', type: 'time', value: habito?.lembrete ?? '' });
+
   const camposNumero = h('div', { class: 'dupla' }, campo('Unidade', unidade), campo('Meta por dia', meta));
   const segmentos = h('div', { class: 'segmentos' });
   const desenharTipo = () => {
@@ -439,7 +443,7 @@ function editarHabito(habito) {
       return;
     }
 
-    const dados = { nome: nomeFinal, cor, tipo, unidade: null, meta: null };
+    const dados = { nome: nomeFinal, cor, tipo, unidade: null, meta: null, lembrete: lembrete.value || null };
     if (tipo === 'numero') {
       dados.unidade = unidade.value.trim() || null;
       dados.meta = lerNumero(meta.value) || 1;
@@ -452,6 +456,8 @@ function editarHabito(habito) {
     salvar();
     fechar();
     redesenhar();
+    // Hábito com lembrete avisa: é a hora de pedir a permissão, se ainda não foi pedida.
+    if (dados.lembrete) pedirPermissaoSeFaltar();
   };
 
   const excluir = async () => {
@@ -489,6 +495,7 @@ function editarHabito(habito) {
       h('div', { class: 'rotulo' }, 'Cor', amostras),
       h('div', { class: 'rotulo' }, 'Tipo', segmentos),
       camposNumero,
+      campo('Lembrete (opcional)', lembrete),
       habito
         ? h(
             'div',
@@ -657,6 +664,15 @@ function render(raiz) {
 
   clearTimeout(esperaSumir);
   if (vaiSumir) esperaSumir = setTimeout(redesenhar, SUMIR_MS);
+}
+
+// Botão "Feito" da notificação de um hábito: marca o dia do aviso, se o hábito ainda existe,
+// é de sim ou não e o dia continua em branco (quem já marcou ou pulou não é sobrescrito).
+export function marcarHabitoNoDia(habitoId, dia) {
+  const habito = estado.habitos.find((x) => x.id === habitoId);
+  if (!habito || habito.tipo === 'numero' || !dataValida(dia) || dia > hoje()) return;
+  if (estado.registros[habito.id]?.[dia] !== undefined) return;
+  gravar(habito, dia, 'feito');
 }
 
 export const habitos = {

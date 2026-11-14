@@ -14,6 +14,13 @@ import { MOTIVO, gerarBackup, lerBackup } from '../../www/js/nucleo/backup.js';
 import { UNIDADES } from '../../www/js/nucleo/repeticao.js';
 import { pontuacao, sequencias } from '../../www/js/nucleo/habito-calculo.js';
 import { somaDias } from '../../www/js/nucleo/datas.js';
+import {
+  AVISOS_DO_DIA,
+  DIAS_DE_RESUMO,
+  MAXIMO_DA_ROTINA,
+  MAXIMO_DE_HABITOS,
+  planejarDoDia,
+} from '../../www/js/nucleo/avisos-do-dia.js';
 
 const DIA = '2026-11-14';
 const OPCOES = { seed: 20261114, numRuns: 500 };
@@ -74,6 +81,7 @@ const habito = registro({
   unidade: talvez(fc.option(curto)),
   meta: talvez(fc.option(fc.oneof(fc.integer({ min: -2, max: 50 }), fc.double({ noNaN: true })))),
   arquivado: logico,
+  lembrete: talvez(hora),
 });
 const marca = fc.oneof(
   fc.constantFrom('feito', 'pulado', 'talvez'),
@@ -87,12 +95,16 @@ const tarefa = registro({
   notas: talvez(curto),
   prazo: talvez(fc.option(dia)),
   hora: talvez(hora),
+  // Metade das repetições sai completa; a outra metade pode vir sem um dos campos ou com valor errado.
   repeticao: talvez(
     fc.option(
-      registro({
-        cada: talvez(fc.integer({ min: -1, max: 120 })),
-        unidade: talvez(fc.constantFrom(...UNIDADES, 'seculo')),
-      }),
+      fc.oneof(
+        fc.record({ cada: fc.integer({ min: 1, max: 99 }), unidade: fc.constantFrom(...UNIDADES) }),
+        registro({
+          cada: talvez(fc.integer({ min: -1, max: 120 })),
+          unidade: talvez(fc.constantFrom(...UNIDADES, 'seculo')),
+        }),
+      ),
     ),
   ),
   estrela: logico,
@@ -124,6 +136,7 @@ const estadoRuim = registro({
   tarefas: talvez(fc.array(tarefa, { maxLength: 6 })),
   ordemTarefas: talvez(fc.constantFrom(...ORDENS_TAREFAS, 'outra')),
   lembretes: logico,
+  avisosDoDia: talvez(registro({ manha: logico, noite: logico, rotina: logico, habitos: logico })),
 });
 // Referências geradas ao acaso quase nunca apontam para algo que existe. Em três de cada quatro casos,
 // as marcas do dia, a ligação item-hábito, os registros e as notas são refeitos a partir das
@@ -268,6 +281,66 @@ test('propriedade: a pontuação fica entre 0 e 1 e a sequência atual nunca pas
   );
 });
 
+// ------------------------------------------------------------- avisos do dia
+
+test('propriedade: o plano dos avisos do dia só tem avisos futuros, em ordem, sem número repetido e dentro dos limites', () => {
+  const momento = fc
+    .tuple(fc.integer({ min: -3, max: 3 }), fc.integer({ min: 0, max: 23 }), fc.integer({ min: 0, max: 59 }))
+    .map(([d, h, m]) => `${somaDias(DIA, d)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  fc.assert(
+    fc.property(estadoValido, momento, (estado, agora) => {
+      const hoje = agora.slice(0, 10);
+      const rotinaAberta = estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? null;
+      const marcadas = new Set(
+        estado.marcasRotina.data === hoje ? (estado.marcasRotina.porRotina[rotinaAberta?.id] ?? []) : [],
+      );
+      const dados = {
+        rotinaDe: () => rotinaAberta,
+        marcadas,
+        habitos: estado.habitos,
+        registros: estado.registros,
+        tarefas: estado.tarefas,
+        habitoVale: () => true,
+      };
+      const plano = planejarDoDia(dados, estado.avisosDoDia, agora);
+
+      assert.equal(new Set(plano.map((x) => x.id)).size, plano.length, 'número de notificação repetido');
+      const quantos = (tipo) => plano.filter((x) => x.tipo === tipo).length;
+      assert.ok(quantos('manha') <= DIAS_DE_RESUMO && quantos('noite') <= DIAS_DE_RESUMO);
+      assert.ok(quantos('rotina') <= MAXIMO_DA_ROTINA && quantos('habito') <= MAXIMO_DE_HABITOS);
+      for (const [i, aviso] of plano.entries()) {
+        assert.ok(Number.isInteger(aviso.id) && aviso.id > 0 && aviso.id <= 2 ** 30);
+        assert.ok(aviso.quando > agora, `aviso no passado: ${aviso.quando}`);
+        assert.ok(i === 0 || plano[i - 1].quando <= aviso.quando, 'fora de ordem');
+        assert.ok(aviso.titulo && aviso.corpo, 'aviso sem texto');
+        assert.ok(aviso.dia >= hoje && aviso.dia <= somaDias(hoje, DIAS_DE_RESUMO - 1));
+        // Cada tipo só aparece com o interruptor dele ligado.
+        const chave = aviso.tipo === 'habito' ? 'habitos' : aviso.tipo;
+        assert.equal(estado.avisosDoDia[chave], true, `aviso de ${aviso.tipo} com o interruptor desligado`);
+        // O botão "Feito" só vai no lembrete de um hábito de sim ou não, ativo e com hora.
+        const avisado = estado.habitos.find((x) => x.id === aviso.habitoId);
+        assert.equal(aviso.tipo === 'habito', Boolean(avisado));
+        if (avisado) assert.ok(avisado.lembrete && !avisado.arquivado);
+        assert.equal(aviso.comFeito, Boolean(avisado) && avisado.tipo !== 'numero');
+      }
+      // Item da rotina já marcado hoje não avisa hoje.
+      for (const aviso of plano.filter((x) => x.tipo === 'rotina' && x.dia === hoje)) {
+        const naRotina = rotinaAberta.itens.find(
+          (i) =>
+            `${i.hora} · ${rotinaAberta.nome}` === aviso.corpo &&
+            i.texto === aviso.titulo &&
+            !marcadas.has(i.id),
+        );
+        assert.ok(naRotina, 'aviso de item marcado ou inexistente');
+      }
+      // Tudo desligado: plano vazio.
+      const nada = Object.fromEntries(AVISOS_DO_DIA.map((chave) => [chave, false]));
+      assert.deepEqual(planejarDoDia(dados, nada, agora), []);
+    }),
+    OPCOES,
+  );
+});
+
 // --------------------------------------------------------- o próprio gerador
 
 test('o gerador de estados válidos produz estados com conteúdo, não só estados vazios', () => {
@@ -287,6 +360,8 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
     'tarefas com prazo': parte((e) => e.tarefas.some((x) => x.prazo)),
     'tarefas que repetem': parte((e) => e.tarefas.some((x) => x.repeticao)),
     'registros de hábito': parte(diasRegistrados),
+    'hábitos com lembrete': parte((e) => e.habitos.some((x) => x.lembrete)),
+    'algum aviso do dia desligado': parte((e) => Object.values(e.avisosDoDia).includes(false)),
     'notas de hábito': parte((e) => Object.keys(e.notasHabito).length > 0),
     'marcas do dia nas rotinas': parte(marcasDoDia),
   };
