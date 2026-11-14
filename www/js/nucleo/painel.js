@@ -1,7 +1,7 @@
 // Resumo do dia para a aba Painel: rotina aberta, hábitos e tarefas de hoje.
 // Lógica pura: recebe os dados, a data e a hora, devolve só números e listas curtas.
 
-import { cumprido } from './habito-calculo.js';
+import { cumprido, valorDoDia } from './habito-calculo.js';
 import { porPrazo } from './prazos.js';
 import { horarioDaRotina } from './rotina-horario.js';
 import { EM_RISCO_NO_PAINEL, sequenciasEmRisco } from './em-risco.js';
@@ -40,11 +40,11 @@ function resumoDaRotina(rotina, marcadas, hora) {
 // rotina: a rotina aberta (ou null); marcadas: Set com os ids marcados hoje nela.
 // dia: hoje, 'AAAA-MM-DD'; hora: agora, 'HH:MM'.
 //   rotina:  itens feitos e total, os próximos itens e onde o relógio está (ver acima)
-//   habitos: os não arquivados; pular o dia tira o hábito da conta
+//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito) tira da conta
 //   emRisco: hábitos cuja sequência acaba hoje se ficarem em branco (ver em-risco.js)
 //   tarefas: pendentes com prazo até hoje (as atrasadas primeiro), e quantas estão atrasadas
 export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia, hora }) {
-  const contam = habitos.filter((x) => !x.arquivado && registros[x.id]?.[dia] !== 'pulado');
+  const contam = habitos.filter((x) => !x.arquivado && valorDoDia(x, registros[x.id], dia) !== 'pulado');
   const paraHoje = tarefas.filter((t) => !t.feita && t.prazo && t.prazo <= dia).sort(porPrazo);
   const emRisco = sequenciasEmRisco(habitos, registros, dia);
 

@@ -187,7 +187,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 5);
+  assert.equal(salvo.versao, 6);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -436,7 +436,7 @@ test('resposta tátil: no app Android vai pelos efeitos do sistema; marcar, conc
   await visivel(botao(pagina, 'Leitura, hoje: feito'));
   await pagina.waitForTimeout(120);
   await botao(pagina, 'Leitura, hoje: feito').click();
-  await visivel(botao(pagina, 'Leitura, hoje: pulado'));
+  await visivel(botao(pagina, 'Leitura, hoje: folga'));
   assert.deepEqual(await hapticas(), ['concluido', 'marcar']);
 
   // Em rajada (menos de 80 ms entre uma chamada e outra), só a primeira vibra.
@@ -822,7 +822,7 @@ test('rotina: a caixa da seção marca e desmarca o bloco inteiro, e o desfazer 
 
 // ------------------------------------------------------------------- hábitos
 
-test('hábito de sim ou não: o toque alterna feito, pulado e não feito', async (t) => {
+test('hábito de sim ou não: o toque alterna feito, folga e não feito', async (t) => {
   const { pagina, erros } = await abrir(t);
 
   await botao(pagina, 'Hábitos').click();
@@ -832,8 +832,8 @@ test('hábito de sim ou não: o toque alterna feito, pulado e não feito', async
 
   for (const [antes, depois] of [
     ['não feito', 'feito'],
-    ['feito', 'pulado'],
-    ['pulado', 'não feito'],
+    ['feito', 'folga'],
+    ['folga', 'não feito'],
   ]) {
     await botao(pagina, `Leitura, hoje: ${antes}`).click();
     await visivel(botao(pagina, `Leitura, hoje: ${depois}`));
@@ -884,7 +884,7 @@ test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o p
   assert.equal(await pagina.locator('.anel.pulsa').count(), 1);
 
   await feita.click();
-  const pulada = botao(pagina, 'Leitura, hoje: pulado');
+  const pulada = botao(pagina, 'Leitura, hoje: folga');
   await visivel(pulada);
   assert.ok((await classes(pulada)).includes('marcou'));
   assert.ok(!(await classes(pulada)).includes('concluiu'));
@@ -970,10 +970,10 @@ test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazi
   assert.equal(await marcada('Feito'), 'true');
   await opcao('Folga').click();
   await botao(pagina, 'Salvar').click();
-  await visivel(botao(pagina, 'Leitura, hoje: pulado, com nota'));
+  await visivel(botao(pagina, 'Leitura, hoje: folga, com nota'));
 
   // Vazio apaga o registro do dia; a nota fica.
-  await segurar(botao(pagina, 'Leitura, hoje: pulado, com nota'));
+  await segurar(botao(pagina, 'Leitura, hoje: folga, com nota'));
   assert.equal(await marcada('Folga'), 'true');
   await opcao('Vazio').click();
   await botao(pagina, 'Salvar').click();
@@ -2271,5 +2271,41 @@ test('fonte: a Inter vem do próprio app e carrega com a política de segurança
 
   assert.equal(fonte.carregou, true);
   assert.match(fonte.corpo, /^"?Inter"?,/);
+  assert.deepEqual(erros, []);
+});
+
+test('hábito com dias da semana: fora deles o dia vira folga sem gravar nada', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const nomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  const hojeNaSemana = await pagina.evaluate(() => new Date().getDay());
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  // Todos os dias vêm ligados; desligar o de hoje.
+  assert.equal(await pagina.locator('.dia-semana[aria-pressed=true]').count(), 7);
+  await botao(pagina, nomes[hojeNaSemana]).click();
+  await botao(pagina, 'Salvar').click();
+
+  await visivel(botao(pagina, 'Leitura, hoje: folga'));
+  const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+  assert.equal(salvo.versao, 6);
+  assert.equal(salvo.habitos[0].diasDaSemana.length, 6);
+  assert.equal(salvo.habitos[0].diasDaSemana.includes(hojeNaSemana), false);
+  assert.deepEqual(salvo.registros.h ?? {}, {});
+  assert.equal(Object.values(salvo.registros).flatMap((r) => Object.keys(r)).length, 0);
+
+  // Tocar na folga automática marca feito, como num dia comum.
+  await botao(pagina, 'Leitura, hoje: folga').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+
+  // O último dia ligado não desliga: o hábito vale em pelo menos um dia.
+  await pagina.locator('.habito-nome').first().click();
+  await visivel(botao(pagina, 'Domingo'));
+  for (const nome of nomes) {
+    if ((await botao(pagina, nome).getAttribute('aria-pressed')) === 'true')
+      await botao(pagina, nome).click();
+  }
+  assert.equal(await pagina.locator('.dia-semana[aria-pressed=true]').count(), 1);
   assert.deepEqual(erros, []);
 });

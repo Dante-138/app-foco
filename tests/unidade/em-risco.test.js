@@ -64,3 +64,14 @@ test('numérico abaixo da meta hoje continua em risco, com a sequência até ont
   sequenciasEmRisco(habitos, registros, HOJE);
   assert.equal(registros.agua[HOJE], 3);
 });
+
+test('folga automática: fora dos dias da semana do hábito ele não está em risco, e a folga não quebra a sequência', () => {
+  // 13/11/2026 é sexta. O hábito vale de segunda a quinta: hoje é folga.
+  const segAQui = simNao('h', { diasDaSemana: [1, 2, 3, 4] });
+  const registros = { h: seguidos(4, ONTEM) }; // segunda a quinta feitos
+  assert.deepEqual(sequenciasEmRisco([segAQui], registros, HOJE), []);
+  // Na segunda seguinte, com sexta, sábado e domingo de folga, a sequência continua viva e em risco.
+  assert.deepEqual(resumo(sequenciasEmRisco([segAQui], registros, '2026-11-16')), [['h', 4]]);
+  // Marcar num dia de folga vale: quem fez hoje não está em risco.
+  assert.deepEqual(sequenciasEmRisco([segAQui], { h: { ...registros.h, [HOJE]: 'feito' } }, HOJE), []);
+});
