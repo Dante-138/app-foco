@@ -10,11 +10,14 @@ export const TAREFAS_NO_PAINEL = 5;
 // rotina: a rotina aberta (ou null); marcadas: Set com os ids marcados hoje nela.
 // dia: hoje, 'AAAA-MM-DD'.
 //   rotina:  itens feitos e total, e os próximos itens que faltam, na ordem da rotina
-//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito) tira da conta
+//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito, ou de pausa) tira da conta
+// pausas: as férias e feriados do estado (sem elas, nenhum dia é de pausa).
 //   tarefas: pendentes com prazo até hoje (as atrasadas primeiro), e quantas estão atrasadas
-export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia }) {
+export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia, pausas = [] }) {
   const itens = rotina ? rotina.itens.filter((item) => item.tipo === 'item') : [];
-  const contam = habitos.filter((x) => !x.arquivado && valorDoDia(x, registros[x.id], dia) !== 'pulado');
+  const contam = habitos.filter(
+    (x) => !x.arquivado && valorDoDia(x, registros[x.id], dia, pausas) !== 'pulado',
+  );
   const paraHoje = tarefas.filter((t) => !t.feita && t.prazo && t.prazo <= dia).sort(porPrazo);
 
   return {

@@ -59,6 +59,10 @@ function valido() {
     notasHabito: { h1: { '2026-11-11': 'Viagem, sem livro' } },
     ocultarConcluidos: true,
     ocultarArquivados: false,
+    pausas: [
+      { id: 'p1', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' },
+      { id: 'p2', nome: 'Feriado', de: '2026-11-20', ate: '2026-11-20' },
+    ],
     listas: [
       { id: 'l1', nome: 'Faculdade' },
       { id: 'l2', nome: 'Pessoal' },
@@ -124,6 +128,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
+    pausas: [],
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
     listaAtiva: 'id-gerado',
     tarefas: [],
@@ -302,6 +307,41 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
     },
   ]);
+});
+
+test('pausas: só com as duas datas reais; datas trocadas entram em ordem; nome cortado ou padrão', () => {
+  const { estado, avisos } = limpar({
+    pausas: [
+      { id: 'a', nome: '  Férias  ', de: '2026-12-21', ate: '2027-01-03' },
+      { id: 'b', nome: 'Trocada', de: '2026-11-20', ate: '2026-11-18' },
+      { id: 'c', nome: '', de: '2026-11-20', ate: '2026-11-20' },
+      { id: 'd', nome: 'n'.repeat(LIMITES.nomePausa + 5), de: '2026-11-21', ate: '2026-11-21', lixo: 1 },
+      { id: 'e', nome: 'Sem fim', de: '2026-11-20' },
+      { id: 'f', nome: 'Data errada', de: '2026-02-30', ate: '2026-03-01' },
+      { id: 'a', nome: 'Repetida', de: '2026-11-20', ate: '2026-11-20' },
+      'texto',
+    ],
+  });
+  assert.deepEqual(estado.pausas, [
+    { id: 'a', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' },
+    { id: 'b', nome: 'Trocada', de: '2026-11-18', ate: '2026-11-20' },
+    { id: 'c', nome: 'Pausa', de: '2026-11-20', ate: '2026-11-20' },
+    { id: 'd', nome: 'n'.repeat(LIMITES.nomePausa), de: '2026-11-21', ate: '2026-11-21' },
+  ]);
+  assert.equal(avisos.length, 4); // duas com data inválida, a repetida e o texto
+  assert.deepEqual(limpar({ pausas: 'férias' }).estado.pausas, []);
+});
+
+test('pausas: ficam as primeiras até o limite', () => {
+  const muitas = Array.from({ length: 70 }, (_, i) => ({
+    id: `p${i}`,
+    nome: 'P',
+    de: '2026-11-20',
+    ate: '2026-11-20',
+  }));
+  const { estado } = limpar({ pausas: muitas });
+  assert.equal(estado.pausas.length, 60);
+  assert.equal(estado.pausas.at(-1).id, 'p59');
 });
 
 test('hábito numérico: unidade cortada ou nula, meta inválida vira 1', () => {

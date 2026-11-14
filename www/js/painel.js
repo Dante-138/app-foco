@@ -155,6 +155,7 @@ function render(raiz) {
     registros: estado.registros,
     tarefas: estado.tarefas,
     dia,
+    pausas: estado.pausas,
   });
   const { tarefas: deHoje } = resumo;
 

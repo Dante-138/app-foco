@@ -17,6 +17,8 @@
 //                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos) }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
 //   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
+//   pausas:       [{ id, nome, de: 'AAAA-MM-DD', ate: 'AAAA-MM-DD' }]   (férias e feriados, datas
+//                 incluídas e em ordem; nesses dias todo hábito fica de folga; ver pausas.js)
 //   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
 //   ocultarArquivados: verdadeiro esconde da grade os hábitos arquivados (padrão: verdadeiro)
 //   listas:       [{ id, nome }]   (sempre pelo menos uma)
@@ -38,6 +40,7 @@ import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { TODOS_OS_DIAS } from './habito-calculo.js';
 import { repeticaoValida } from './repeticao.js';
+import { LIMITE_DE_PAUSAS, emOrdem } from './pausas.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
 export const LIMITES = Object.freeze({
@@ -51,6 +54,7 @@ export const LIMITES = Object.freeze({
   tituloTarefa: 200,
   notasTarefa: 2000,
   notaHabito: 300,
+  nomePausa: 40,
 });
 
 // A primeira é a padrão. A ordem na barra de abas é a de js/app.js.
@@ -168,6 +172,20 @@ function sanearNotasHabito(valor, habitos, avisos) {
   return notas;
 }
 
+// Pausas: só com as duas datas reais; datas trocadas são postas em ordem.
+function sanearPausas(valor, avisos) {
+  return comIdUnico(valor, 'pausas', avisos)
+    .slice(0, LIMITE_DE_PAUSAS)
+    .flatMap((pausa) => {
+      if (!dataValida(pausa.de) || !dataValida(pausa.ate)) {
+        avisos.push('pausa com data inválida, descartada');
+        return [];
+      }
+      const [de, ate] = emOrdem(pausa.de, pausa.ate);
+      return [{ id: pausa.id, nome: cortar(pausa.nome, LIMITES.nomePausa) || 'Pausa', de, ate }];
+    });
+}
+
 function sanearListas(valor, gerarId, avisos) {
   const listas = comIdUnico(valor, 'listas', avisos).map((lista) => ({
     id: lista.id,
@@ -244,6 +262,7 @@ export function sanear(dados, { dia, gerarId }) {
     notasHabito: sanearNotasHabito(dados.notasHabito, habitos, avisos),
     ocultarConcluidos: dados.ocultarConcluidos === true,
     ocultarArquivados: dados.ocultarArquivados !== false,
+    pausas: sanearPausas(dados.pausas, avisos),
     listas,
     listaAtiva:
       dados.listaAtiva === VISAO_ESTRELA || listas.some((l) => l.id === dados.listaAtiva)

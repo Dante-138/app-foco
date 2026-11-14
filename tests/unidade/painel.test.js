@@ -83,3 +83,14 @@ test('hábitos: fora dos dias da semana do hábito, ele sai da conta do dia', ()
   });
   assert.deepEqual(r.habitos, { feitos: 1, total: 1 });
 });
+
+test('hábitos: em dia de pausa (férias ou feriado) saem da conta do dia, menos o que foi feito', () => {
+  const habitos = [
+    { id: 'a', tipo: 'simnao', diasDaSemana: [0, 1, 2, 3, 4, 5, 6] },
+    { id: 'b', tipo: 'simnao', diasDaSemana: [0, 1, 2, 3, 4, 5, 6] },
+  ];
+  const pausas = [{ id: 'p', nome: 'Férias', de: '2026-11-10', ate: '2026-11-20' }];
+  const registros = { b: { [HOJE]: 'feito' } };
+  assert.deepEqual(resumoDoDia({ ...vazio, habitos, registros }).habitos, { feitos: 1, total: 2 });
+  assert.deepEqual(resumoDoDia({ ...vazio, habitos, registros, pausas }).habitos, { feitos: 1, total: 1 });
+});

@@ -291,3 +291,54 @@ test('visiveis: com "ocultar concluídos", o hábito de folga hoje sai da grade'
     ['t'],
   );
 });
+
+// ------------------------------------------------------------ férias e feriados
+
+// 09/11/2026 é segunda. Feitos de segunda a quinta (09 a 12); sexta 13 em branco.
+const DIARIO = { id: 'd', tipo: 'simnao', diasDaSemana: [0, 1, 2, 3, 4, 5, 6] };
+const ATE_QUINTA = Object.fromEntries(
+  ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12'].map((d) => [d, 'feito']),
+);
+const SEXTA_DE_PAUSA = [{ id: 'p', nome: 'Feriado', de: '2026-11-13', ate: '2026-11-13' }];
+
+test('pausa: no dia de pausa o hábito não vale, e o branco vira folga sem gravar nada', () => {
+  assert.equal(valeNoDia(DIARIO, '2026-11-13', SEXTA_DE_PAUSA), false);
+  assert.equal(valeNoDia(DIARIO, '2026-11-12', SEXTA_DE_PAUSA), true);
+  assert.equal(valeNoDia(DIARIO, '2026-11-13', []), true);
+  assert.equal(valorDoDia(DIARIO, ATE_QUINTA, '2026-11-13', SEXTA_DE_PAUSA), 'pulado');
+  assert.equal(valorDoDia(DIARIO, ATE_QUINTA, '2026-11-13'), undefined);
+  // Marcar num dia de pausa continua valendo.
+  assert.equal(valorDoDia(DIARIO, { '2026-11-13': 'feito' }, '2026-11-13', SEXTA_DE_PAUSA), 'feito');
+  assert.equal(Object.hasOwn(ATE_QUINTA, '2026-11-13'), false);
+});
+
+test('pausa: o dia em branco dentro dela não quebra a sequência; fora dela, quebra', () => {
+  // No sábado 14: sem a pausa, a sexta em branco quebrou a sequência; com ela, continua viva.
+  assert.deepEqual(sequencias(DIARIO, ATE_QUINTA, '2026-11-14'), { atual: 0, melhor: 4 });
+  assert.deepEqual(sequencias(DIARIO, ATE_QUINTA, '2026-11-14', SEXTA_DE_PAUSA), { atual: 4, melhor: 4 });
+  // No domingo 15, o sábado em branco já está fora da pausa: quebra.
+  assert.deepEqual(sequencias(DIARIO, ATE_QUINTA, '2026-11-15', SEXTA_DE_PAUSA), { atual: 0, melhor: 4 });
+  // Pausa no meio do histórico junta os dois trechos numa sequência só.
+  const comSabado = { ...ATE_QUINTA, '2026-11-14': 'feito' };
+  assert.deepEqual(sequencias(DIARIO, comSabado, '2026-11-14'), { atual: 1, melhor: 4 });
+  assert.deepEqual(sequencias(DIARIO, comSabado, '2026-11-14', SEXTA_DE_PAUSA), { atual: 5, melhor: 5 });
+});
+
+test('pausa: o dia em branco dentro dela não pesa na pontuação', () => {
+  const semFuro = pontuacao(DIARIO, ATE_QUINTA, '2026-11-13');
+  assert.equal(pontuacao(DIARIO, ATE_QUINTA, '2026-11-14', SEXTA_DE_PAUSA), semFuro);
+  assert.ok(pontuacao(DIARIO, ATE_QUINTA, '2026-11-14') < semFuro);
+  // Pausa soma com a frequência: hábito de dias úteis, com a sexta de pausa, só deve a segunda.
+  const uteis = { ...DIARIO, diasDaSemana: [1, 2, 3, 4, 5] };
+  assert.deepEqual(sequencias(uteis, ATE_QUINTA, '2026-11-16', SEXTA_DE_PAUSA), { atual: 4, melhor: 4 });
+  assert.deepEqual(sequencias(uteis, ATE_QUINTA, '2026-11-17', SEXTA_DE_PAUSA), { atual: 0, melhor: 4 });
+});
+
+test('pausa: com "ocultar concluídos", o hábito em dia de pausa sai da grade', () => {
+  const filtro = { ocultarConcluidos: true, ocultarArquivados: false };
+  const ids = (extra) =>
+    visiveis([DIARIO], { d: {} }, '2026-11-13', { ...filtro, ...extra }).map((x) => x.id);
+  assert.deepEqual(ids({}), ['d']);
+  assert.deepEqual(ids({ pausas: SEXTA_DE_PAUSA }), []);
+  assert.deepEqual(ids({ pausas: SEXTA_DE_PAUSA, manter: 'd' }), ['d']);
+});

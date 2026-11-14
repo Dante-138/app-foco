@@ -23,6 +23,7 @@ export function estadoInicial({ dia, gerarId }) {
     notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
+    pausas: [],
     listas: [lista],
     listaAtiva: lista.id,
     tarefas: [],

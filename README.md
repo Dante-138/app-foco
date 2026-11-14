@@ -14,6 +14,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
   mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um
   dia abre a folha dele: o estado (feito, folga ou vazio; quantidade, no numérico) e uma nota.
+  Férias e feriados (em Ajustes) deixam todos os hábitos de folga nos dias da pausa: a sequência
+  não quebra e a pontuação não cai.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
