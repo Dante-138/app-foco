@@ -200,48 +200,130 @@ function pedirValor(habito, dia) {
   entrada.select();
 }
 
-// Nota do dia, como no Loop: segurar uma célula da grade abre a nota daquele dia.
-function editarNota(habito, dia) {
-  const atual = estado.notasHabito[habito.id]?.[dia] ?? '';
-  const texto = h('textarea', {
+// Guarda ou apaga a nota de um dia de um hábito, sem salvar nem redesenhar.
+function aplicarNota(habito, dia, nota) {
+  const notas = (estado.notasHabito[habito.id] ??= {});
+  if (nota) notas[dia] = nota;
+  else delete notas[dia];
+  if (!Object.keys(notas).length) delete estado.notasHabito[habito.id];
+}
+
+// Estado de um dia, do jeito que a folha do dia mostra: 'feito' (no hábito numérico, 'quantidade'),
+// 'pulado' (a folga) ou 'vazio'.
+function escolhaDoDia(habito, valor) {
+  if (valor === 'pulado') return 'pulado';
+  if (valor == null) return 'vazio';
+  return habito.tipo === 'numero' ? 'quantidade' : 'feito';
+}
+
+// Folha do dia, como no Loop: segurar uma célula da grade abre o estado e a nota daquele dia.
+// Salvar grava os dois juntos: dá para só marcar, só anotar, ou anotar e já concluir ou folgar.
+// O estado só é regravado se mudou na folha; mudar por aqui não mexe nas marcas das rotinas,
+// como o toque na grade.
+function editarDia(habito, dia) {
+  const notaAtual = estado.notasHabito[habito.id]?.[dia] ?? '';
+  const valorAtual = estado.registros[habito.id]?.[dia] ?? null;
+  const numerico = habito.tipo === 'numero';
+  const escolhaInicial = escolhaDoDia(habito, valorAtual);
+  const quantidadeInicial = typeof valorAtual === 'number' ? formatar(valorAtual) : '';
+  let escolha = escolhaInicial;
+
+  const quantidade = h('input', {
+    class: 'entrada',
+    type: 'text',
+    inputMode: 'decimal',
+    value: quantidadeInicial,
+    placeholder: '0',
+    autocomplete: 'off',
+  });
+  const campoQuantidade = campo(habito.unidade ? `Quantidade (${habito.unidade})` : 'Quantidade', quantidade);
+  const nota = h('textarea', {
     class: 'entrada',
     rows: 3,
-    value: atual,
+    value: notaAtual,
     placeholder: 'Ex.: dia de viagem',
     maxLength: LIMITES.notaHabito,
   });
 
-  const gravarNota = (valor) => {
-    const notas = (estado.notasHabito[habito.id] ??= {});
-    if (valor) notas[dia] = valor;
-    else delete notas[dia];
-    if (!Object.keys(notas).length) delete estado.notasHabito[habito.id];
+  const opcoes = [
+    numerico ? ['quantidade', 'Quantidade'] : ['feito', 'Feito'],
+    ['pulado', 'Folga'],
+    ['vazio', 'Vazio'],
+  ];
+  const segmentos = h('div', { class: 'segmentos', role: 'radiogroup', 'aria-label': 'Estado do dia' });
+  const desenhar = () => {
+    segmentos.replaceChildren(
+      ...opcoes.map(([valor, rotulo]) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: `segmento${escolha === valor ? ' ativo' : ''}`,
+            role: 'radio',
+            'aria-checked': String(escolha === valor),
+            onclick: () => {
+              escolha = valor;
+              desenhar();
+              if (valor === 'quantidade') quantidade.focus();
+            },
+          },
+          rotulo,
+        ),
+      ),
+    );
+    campoQuantidade.hidden = escolha !== 'quantidade';
+  };
+  desenhar();
+
+  // Valor a gravar no registro: { mudou, valor }, ou null quando a quantidade não é um número.
+  const estadoEscolhido = () => {
+    if (escolha !== 'quantidade') {
+      return { mudou: escolha !== escolhaInicial, valor: escolha === 'vazio' ? null : escolha };
+    }
+    const texto = quantidade.value.trim();
+    if (escolha === escolhaInicial && texto === quantidadeInicial) return { mudou: false, valor: valorAtual };
+    const numero = texto ? lerNumero(texto) : null;
+    return numero == null ? null : { mudou: true, valor: numero };
+  };
+
+  const aoSalvar = (e) => {
+    e.preventDefault();
+    const novo = estadoEscolhido();
+    if (!novo) {
+      quantidade.focus();
+      quantidade.select();
+      return;
+    }
+    aplicarNota(habito, dia, nota.value.trim());
+    fechar();
+    // "gravar" salva, vibra e anima a célula, como o toque na grade.
+    if (novo.mudou) gravar(habito, dia, novo.valor);
+    else {
+      salvar();
+      redesenhar();
+    }
+  };
+
+  const excluirNota = () => {
+    aplicarNota(habito, dia, '');
     salvar();
     fechar();
     redesenhar();
   };
 
   const fechar = abrirFolha({
-    titulo: `Nota: ${habito.nome} (${rotuloDia(dia, hoje())})`,
+    titulo: `${habito.nome} (${rotuloDia(dia, hoje())})`,
     corpo: h(
       'form',
-      {
-        class: 'folha-form',
-        onsubmit: (e) => {
-          e.preventDefault();
-          gravarNota(texto.value.trim());
-        },
-      },
-      campo('Nota do dia', texto),
+      { class: 'folha-form', onsubmit: aoSalvar },
+      h('div', { class: 'rotulo' }, 'Estado do dia', segmentos),
+      campoQuantidade,
+      campo('Nota do dia', nota),
       h(
         'div',
         { class: 'linha-botoes' },
-        atual
-          ? h(
-              'button',
-              { type: 'button', class: 'botao perigo', onclick: () => gravarNota('') },
-              'Excluir nota',
-            )
+        notaAtual
+          ? h('button', { type: 'button', class: 'botao perigo', onclick: excluirNota }, 'Excluir nota')
           : null,
         h('span', { class: 'espaco' }),
         h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
@@ -249,7 +331,7 @@ function editarNota(habito, dia) {
       ),
     ),
   });
-  texto.focus();
+  nota.focus();
 }
 
 function mover(habito, passo) {
@@ -447,10 +529,11 @@ function editarHabito(habito) {
 
 // --------------------------------------------------------------- desenho
 
-// A célula guarda a marca do dia; segurar abre a nota. Com nota, aparece um ponto no canto.
+// A célula guarda a marca do dia; segurar abre a folha do dia (estado e nota). Com nota, aparece
+// um ponto no canto.
 function celula(habito, dia, diaHoje) {
   const botao = celulaSemNota(habito, dia, diaHoje);
-  aoSegurar(botao, () => editarNota(habito, dia));
+  aoSegurar(botao, () => editarDia(habito, dia));
   if (estado.notasHabito[habito.id]?.[dia]) {
     botao.classList.add('com-nota');
     botao.setAttribute('aria-label', `${botao.getAttribute('aria-label')}, com nota`);

@@ -12,7 +12,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   ligado a um hábito: marcar o item marca o hábito no dia.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
-  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados.
+  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um
+  dia abre a folha dele: o estado (feito, folga ou vazio; quantidade, no numérico) e uma nota.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
