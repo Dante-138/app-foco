@@ -9,6 +9,7 @@
   --sup-2: #1b1b1e; /* folhas */
   --campo: #111113; /* campos de formulário */
   --grupo: #26262a; /* grupo de linhas dentro de uma folha */
+  --linha-grupo: #3a3a40;
   --toque: #2a2a2e; /* fundo de item pressionado */
   --barra: #09090a; /* barra de abas */
   --linha: #2a2a2e;
@@ -59,6 +60,7 @@
   --sup-2: #ffffff;
   --campo: #f2f2f7;
   --grupo: #f2f2f7;
+  --linha-grupo: #d8d8dd;
   --toque: #e6e6eb;
   --barra: #ffffff;
   --linha: #d8d8dd;
@@ -1353,7 +1355,7 @@ dialog.folha.arrastando {
 }
 
 .linha-campo + .linha-campo {
-  border-top: 1px solid var(--linha);
+  border-top: 1px solid var(--linha-grupo);
 }
 
 .linha-campo > span {
