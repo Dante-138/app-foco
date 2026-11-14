@@ -112,7 +112,7 @@ A versão sai dos commits (Conventional Commits), pelo [release-please](https://
    saiu deste repositório, deste commit:
 
    ```bash
-   gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/foco
+   gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/app-foco
    ```
 
 O `versionCode` do Android sai da versão (1.2.3 vira 10203), então cada release instala por
@@ -128,31 +128,31 @@ Sem eles o workflow só avisa e termina verde. Nada disso é lido por agente nen
 2. **Chave do APK, no ambiente `release`**. No PowerShell, na pasta das chaves:
 
    ```powershell
-   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD/foco.jks")) | gh secret set FOCO_KEYSTORE_BASE64 --env release --repo Dante-138/foco
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD/foco.jks")) | gh secret set FOCO_KEYSTORE_BASE64 --env release --repo Dante-138/app-foco
    ```
 
    Depois as três que o `gh` pergunta sem mostrar o que é digitado (os mesmos valores do
    `assinatura.properties`):
 
    ```bash
-   gh secret set FOCO_KEYSTORE_SENHA --env release --repo Dante-138/foco
+   gh secret set FOCO_KEYSTORE_SENHA --env release --repo Dante-138/app-foco
    ```
 
    ```bash
-   gh secret set FOCO_CHAVE_ALIAS --env release --repo Dante-138/foco
+   gh secret set FOCO_CHAVE_ALIAS --env release --repo Dante-138/app-foco
    ```
 
    ```bash
-   gh secret set FOCO_CHAVE_SENHA --env release --repo Dante-138/foco
+   gh secret set FOCO_CHAVE_SENHA --env release --repo Dante-138/app-foco
    ```
 
 3. **`RELEASE_TOKEN`**, no repositório (não no ambiente): em GitHub, Settings, Developer
-   settings, Fine-grained tokens, crie um token só para o repositório `foco`, com Contents e
+   settings, Fine-grained tokens, crie um token só para o repositório `app-foco`, com Contents e
    Pull requests em leitura e escrita, e validade de até um ano. Com o token padrão do workflow
    o PR de release não dispararia o CI, e a proteção da `main` nunca o liberaria.
 
    ```bash
-   gh secret set RELEASE_TOKEN --repo Dante-138/foco
+   gh secret set RELEASE_TOKEN --repo Dante-138/app-foco
    ```
 
 4. Conferir: o próximo merge na `main` abre o PR de release. Quando o token vencer, o workflow

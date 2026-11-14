@@ -4,7 +4,7 @@ name: Release
 # "chore: release x.y.z", em rascunho, com a versão nova e o CHANGELOG. Quando esse PR é mesclado,
 # ele cria a tag e a release, e o job APK anexa o APK assinado com a chave fixa e uma atestação de
 # proveniência (SLSA): prova assinada de que aquele arquivo saiu deste workflow, deste commit.
-# Conferir no PC: gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/foco
+# Conferir no PC: gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/app-foco
 #
 # Secrets (o passo a passo para cadastrar está no README, em "Releases"):
 #   RELEASE_TOKEN  token fino, só deste repositório, com Contents e Pull requests em leitura e
