@@ -2175,6 +2175,27 @@ test('fonte: a Inter vem do próprio app e carrega com a política de segurança
   assert.equal(fonte.carregou, true);
   assert.match(fonte.corpo, /^"?Inter"?,/);
   assert.deepEqual(erros, []);
+});
+
+test('fonte: a Inter vem do próprio app e carrega com a política de segurança', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const fonte = await pagina.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      carregou: [...document.fonts].some(
+        (f) => f.family.replaceAll('"', '') === 'Inter' && f.status === 'loaded',
+      ),
+      corpo: getComputedStyle(document.body).fontFamily,
+    };
+  });
+
+  assert.equal(fonte.carregou, true);
+  assert.match(fonte.corpo, /^"?Inter"?,/);
+  assert.deepEqual(erros, []);
+});
+
 test('título grande: encolhe ao rolar a lista e volta ao subir', async (t) => {
   const { pagina } = await abrir(t);
   await visivel(pagina.getByText('Nenhuma rotina ainda'));
@@ -2212,6 +2233,8 @@ test('título grande: encolhe ao rolar a lista e volta ao subir', async (t) => {
 
   const deVolta = await escalaDoTitulo(0);
   assert.equal(deVolta.escala, 1);
+});
+
 test('folha da tarefa: abre na metade, sobe e fecha arrastando o topo', async (t) => {
   const { pagina, erros } = await abrir(t);
   await botao(pagina, 'Tarefas').click();
@@ -2250,6 +2273,9 @@ test('folha da tarefa: abre na metade, sobe e fecha arrastando o topo', async (t
   await arrastar(400);
   await pagina.waitForFunction(() => document.querySelector('dialog[open]') === null);
   await visivel(pagina.getByText('Pagar a conta'));
+  assert.deepEqual(erros, []);
+});
+
 test('desfazer: concluir e excluir tarefa e excluir hábito voltam como estavam', async (t) => {
   const { pagina, erros } = await abrir(t);
   const salvo = async () => JSON.parse(await lerSalvo(pagina, CHAVE));
