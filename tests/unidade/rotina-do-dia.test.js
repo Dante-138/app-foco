@@ -1,13 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DIAS_DA_SEMANA,
   abrirRotinaDoDia,
   definirDias,
   descreverDias,
-  diasValidos,
   rotinaDoDia,
 } from '../../www/js/nucleo/rotina-do-dia.js';
+import { DIAS_DA_SEMANA, diasValidos } from '../../www/js/nucleo/datas.js';
 
 // 09/11/2026 é segunda; 14 é sábado e 15, domingo.
 const SEGUNDA = '2026-11-09';

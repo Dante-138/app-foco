@@ -9,6 +9,8 @@ import {
   proximaMarca,
   resolvido,
   sequencias,
+  valeNoDia,
+  valorDoDia,
   visiveis,
 } from '../../www/js/nucleo/habito-calculo.js';
 
@@ -234,4 +236,57 @@ test('sequências do numérico: dia abaixo da meta quebra', () => {
 
 test('pontuação de sim ou não: marca que não é "feito" nem "pulado" conta como não feito', () => {
   assert.equal(pontuacao(simNao, { '2026-11-12': 3 }, HOJE), 0);
+});
+
+// ------------------------------------------------- frequência por dia da semana
+
+// 09/11/2026 é segunda; 14 é sábado e 15, domingo.
+const UTEIS = { id: 'u', tipo: 'simnao', diasDaSemana: [1, 2, 3, 4, 5] };
+const TODO_DIA = { id: 't', tipo: 'simnao', diasDaSemana: [0, 1, 2, 3, 4, 5, 6] };
+const SEMANA = Object.fromEntries(
+  ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'].map((d) => [d, 'feito']),
+);
+
+test('valeNoDia e valorDoDia: fora dos dias do hábito, o branco vira folga sem gravar nada', () => {
+  assert.equal(valeNoDia(UTEIS, '2026-11-13'), true);
+  assert.equal(valeNoDia(UTEIS, '2026-11-14'), false);
+  assert.equal(valeNoDia({ id: 'sem-campo' }, '2026-11-14'), true);
+  assert.equal(valorDoDia(UTEIS, SEMANA, '2026-11-14'), 'pulado');
+  assert.equal(valorDoDia(UTEIS, SEMANA, '2026-11-13'), 'feito');
+  assert.equal(valorDoDia(UTEIS, SEMANA, '2026-11-16'), undefined);
+  assert.equal(valorDoDia(UTEIS, { '2026-11-14': 'feito' }, '2026-11-14'), 'feito');
+  assert.equal(valorDoDia(UTEIS, undefined, '2026-11-15'), 'pulado');
+  assert.equal(Object.hasOwn(SEMANA, '2026-11-14'), false); // a folga não foi gravada
+});
+
+test('sequência: o fim de semana de folga não quebra; a segunda em branco quebra', () => {
+  assert.deepEqual(sequencias(UTEIS, SEMANA, '2026-11-16'), { atual: 5, melhor: 5 });
+  assert.deepEqual(sequencias(TODO_DIA, SEMANA, '2026-11-16'), { atual: 0, melhor: 5 });
+  assert.deepEqual(sequencias(UTEIS, SEMANA, '2026-11-17'), { atual: 0, melhor: 5 });
+  const comSegunda = { ...SEMANA, '2026-11-16': 'feito' };
+  assert.deepEqual(sequencias(UTEIS, comSegunda, '2026-11-16'), { atual: 6, melhor: 6 });
+});
+
+test('pontuação: dia de folga não pesa; dia pedido em branco pesa', () => {
+  assert.equal(pontuacao(UTEIS, SEMANA, '2026-11-16'), pontuacao(TODO_DIA, SEMANA, '2026-11-14'));
+  assert.ok(pontuacao(UTEIS, SEMANA, '2026-11-17') < pontuacao(UTEIS, SEMANA, '2026-11-16'));
+  const comFolgaNoMeio = { '2026-11-12': 'feito', '2026-11-16': 'feito' };
+  const seguidos = { '2026-11-12': 'feito', '2026-11-13': 'feito' };
+  assert.ok(pontuacao(UTEIS, comFolgaNoMeio, '2026-11-16') < pontuacao(UTEIS, seguidos, '2026-11-13'));
+  assert.equal(
+    pontuacao(
+      { ...UTEIS, diasDaSemana: [4] },
+      { '2026-11-12': 'feito', '2026-11-19': 'feito' },
+      '2026-11-19',
+    ),
+    pontuacao(TODO_DIA, { '2026-11-12': 'feito', '2026-11-13': 'feito' }, '2026-11-13'),
+  );
+});
+
+test('visiveis: com "ocultar concluídos", o hábito de folga hoje sai da grade', () => {
+  const filtro = { ocultarConcluidos: true, ocultarArquivados: false };
+  assert.deepEqual(
+    visiveis([UTEIS, TODO_DIA], { u: {}, t: {} }, '2026-11-14', filtro).map((x) => x.id),
+    ['t'],
+  );
 });

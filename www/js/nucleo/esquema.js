@@ -16,7 +16,7 @@
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
-//                    arquivado }]
+//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos) }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
 //   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
 //   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
@@ -35,11 +35,10 @@
 // limite, cor desconhecida vira a padrão, tarefa de lista inexistente vai para
 // a primeira lista); o que não dá é descartado. Cada correção gera um aviso.
 
-import { dataValida, horaValida } from './datas.js';
+import { DIAS_DA_SEMANA, dataValida, diasValidos, horaValida } from './datas.js';
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
-import { diasValidos } from './rotina-do-dia.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
 export const LIMITES = Object.freeze({
@@ -123,8 +122,16 @@ function sanearHabitos(valor, avisos) {
       unidade: numerico ? cortar(habito.unidade, LIMITES.unidade) || null : null,
       meta: numerico ? (numeroValido(habito.meta) && habito.meta > 0 ? habito.meta : 1) : null,
       arquivado: habito.arquivado === true,
+      diasDaSemana: sanearDiasDaSemana(habito.diasDaSemana),
     };
   });
+}
+
+// Dias da semana do hábito (0 a 6, sem repetir, em ordem). Lista vazia ou inválida vale
+// todos os dias. Na rotina a mesma lista pode ficar vazia (ver sanearRotinas).
+function sanearDiasDaSemana(valor) {
+  const dias = diasValidos(valor);
+  return dias.length ? dias : [...DIAS_DA_SEMANA];
 }
 
 const marcaValida = (v) => v === 'feito' || v === 'pulado' || numeroValido(v);

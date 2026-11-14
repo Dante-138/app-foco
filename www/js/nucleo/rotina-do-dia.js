@@ -2,16 +2,7 @@
 // rotina.diasDaSemana = [0 a 6] (0 = domingo, como Date.getDay); vazio = nunca abre sozinha.
 // Lógica pura: quem salva e redesenha é a interface.
 
-import { deIso } from './datas.js';
-
-export const DIAS_DA_SEMANA = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
-
-// Lista de dias no formato guardado: só inteiros de 0 a 6, sem repetir, em ordem.
-// Qualquer outra coisa (campo ausente, texto, número solto) vira lista vazia.
-export function diasValidos(valor) {
-  if (!Array.isArray(valor)) return [];
-  return DIAS_DA_SEMANA.filter((d) => valor.includes(d));
-}
+import { deIso, diasValidos } from './datas.js';
 
 // A rotina do dia: a primeira, na ordem da faixa, que tem o dia da semana de "dia".
 export function rotinaDoDia(rotinas, dia) {

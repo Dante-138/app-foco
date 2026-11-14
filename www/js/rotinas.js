@@ -430,10 +430,7 @@ function moverRotina(rotina, passo) {
 
 // Dias da semana em que a rotina abre sozinha. O dia escolhido aqui sai das outras rotinas.
 function escolherDias(rotina) {
-  const dias = seletorDeDias(rotina.diasDaSemana, {
-    rotulo: 'Abrir sozinha nestes dias',
-    atalhos: ['uteis', 'fimDeSemana', 'nenhum'],
-  });
+  const dias = seletorDeDias(rotina.diasDaSemana, { atalhos: ['uteis', 'fimDeSemana', 'nenhum'] });
 
   const aoSalvar = (e) => {
     e.preventDefault();
@@ -448,7 +445,7 @@ function escolherDias(rotina) {
     corpo: h(
       'form',
       { class: 'folha-form', onsubmit: aoSalvar },
-      dias.elemento,
+      h('div', { class: 'rotulo' }, 'Abrir sozinha nestes dias', dias.grupo, dias.atalhos),
       h(
         'p',
         { class: 'dica' },
