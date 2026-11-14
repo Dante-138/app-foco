@@ -12,17 +12,23 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// soEmTestes: o padrão só vale em arquivo de teste, onde "skip" e "todo" só têm um sentido; no
+// código do app, um campo ou um método com esses nomes é comum.
 export const PROIBIDOS = [
   { padrao: /Stryker\s+(disable|restore)/, motivo: 'desliga o teste de mutação' },
   { padrao: /\b(c8|v8|istanbul|node:coverage)\s+(ignore|disable)/, motivo: 'esconde código da cobertura' },
   { padrao: /eslint-(disable|enable)|\/\*\s*eslint\s/, motivo: 'desliga regra do lint no código' },
   { padrao: /prettier-ignore/, motivo: 'desliga a formatação' },
-  // test.only(, describe.skip(, it.todo( e o t.skip() de dentro de um teste do node:test.
+  // test.only(, describe.skip(, it.todo( e suite.only(.
   { padrao: /\b(test|it|describe|suite)\.(only|skip|todo)\s*\(/, motivo: 'pula ou isola teste' },
-  { padrao: /\bt\.(skip|todo)\s*\(/, motivo: 'pula teste' },
-  // As mesmas opções escritas no objeto de opções: test('nome', { skip: true }, ...).
-  { padrao: /\b(only|skip|todo)\s*:\s*(true|['"`])/, motivo: 'pula ou isola teste' },
+  // .skip( e .todo( com qualquer nome antes: t.skip(), ctx.skip(), contexto.todo().
+  { padrao: /\.(skip|todo)\s*\(/, motivo: 'pula teste', soEmTestes: true },
+  // As mesmas opções no objeto de opções, com qualquer valor que não seja false:
+  // { skip: true }, { skip: process.env.CI }, { only: cond && 'x' }, { todo: 'depois' }.
+  { padrao: /\b(only|skip|todo)\s*:\s*(?!false\b)\S/, motivo: 'pula ou isola teste', soEmTestes: true },
 ];
+
+const ARQUIVO_DE_TESTE = /(^|[\\/])tests[\\/]|\.test\.m?js$/;
 
 const PADRAO_INICIAL = ['www', 'tests', 'tools', 'eslint.config.js', 'stryker.config.mjs'];
 const EXTENSOES = /\.(js|mjs|cjs|html|css)$/;
@@ -30,14 +36,20 @@ const IGNORADAS = new Set(['node_modules', '.stryker-tmp', 'vendor']);
 // Este arquivo e o teste dele citam os padrões de propósito.
 const ESTE_DETECTOR = /^verificar-escapes(\.test)?\.m?js$/;
 
-/** Ocorrências proibidas em um texto, com o número da linha (base 1). */
-export function acharEscapes(texto) {
+/**
+ * Ocorrências proibidas em um texto, com o número da linha (base 1).
+ * emTestes: o texto é de um arquivo de teste (vale também os padrões soEmTestes).
+ */
+export function acharEscapes(texto, emTestes = false) {
+  const padroes = PROIBIDOS.filter(({ soEmTestes }) => emTestes || !soEmTestes);
   return texto.split('\n').flatMap((conteudo, indice) =>
-    PROIBIDOS.filter(({ padrao }) => padrao.test(conteudo)).map(({ motivo }) => ({
-      linha: indice + 1,
-      motivo,
-      trecho: conteudo.trim(),
-    })),
+    padroes
+      .filter(({ padrao }) => padrao.test(conteudo))
+      .map(({ motivo }) => ({
+        linha: indice + 1,
+        motivo,
+        trecho: conteudo.trim(),
+      })),
   );
 }
 
@@ -57,11 +69,12 @@ function arquivos(caminho) {
 }
 
 function principal(caminhos) {
-  const achados = caminhos
-    .flatMap(arquivos)
-    .flatMap((arquivo) =>
-      acharEscapes(readFileSync(arquivo, 'utf8')).map((achado) => ({ arquivo, ...achado })),
-    );
+  const achados = caminhos.flatMap(arquivos).flatMap((arquivo) =>
+    acharEscapes(readFileSync(arquivo, 'utf8'), ARQUIVO_DE_TESTE.test(arquivo)).map((achado) => ({
+      arquivo,
+      ...achado,
+    })),
+  );
   for (const { arquivo, linha, motivo, trecho } of achados) {
     console.error(`${arquivo}:${linha}  ${motivo}: ${trecho}`);
   }
