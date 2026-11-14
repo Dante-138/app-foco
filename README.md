@@ -105,7 +105,9 @@ A regra vale também para o dono do repositório. O portão confere, nesta ordem
 
 1. **Mensagens de commit e título do PR** no padrão Conventional Commits, com até 72 caracteres
    e sem linha de coautoria. O job `Título` repete a conferência do título e da descrição
-   quando o PR é editado: no merge por squash, são eles que viram o commit na `main`.
+   quando o PR é editado: no merge por squash, são eles que viram o commit na `main`. A única exceção é a linha de assinatura que o
+   Dependabot escreve nos commits dele. As atualizações que ele propõe (npm e GitHub Actions,
+   uma vez por semana) estão em `.github/dependabot.yml`.
 2. **Lint sem nenhum aviso**, e sem comentário de exceção: o `eslint-disable` é proibido.
    Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
 3. **Formatação** conferida pelo Prettier.
