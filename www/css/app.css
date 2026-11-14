@@ -1177,6 +1177,33 @@ li.mudando-de-area.saindo {
   color: var(--texto-2);
 }
 
+/* Folga automática: dia fora dos dias da semana do hábito, sem nada gravado. */
+.cel.folga-auto > * {
+  opacity: 0.4;
+}
+
+/* Seletor dos dias da semana do hábito. */
+.dias-semana {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dia-semana {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--linha);
+  border-radius: 50%;
+  color: var(--texto-2);
+  font-weight: 600;
+}
+
+.dia-semana.ativo {
+  border-color: transparent;
+  background: var(--acento-fundo);
+  color: var(--sobre-acento);
+}
+
 /* --------------------------------------------------------------- tarefas */
 
 .grupo-titulo {
