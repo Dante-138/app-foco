@@ -8,6 +8,8 @@
 // assentar, simplificada (Ramer-Douglas-Peucker) e arredondada; a saída traz também quanto
 // tempo a animação leva até assentar, que é a duração a usar no CSS.
 
+import { pathToFileURL } from 'node:url';
+
 const MOLAS = [
   { nome: 'mola-estado', duracao: 0.22, bounce: 0.15, uso: 'troca de estado, soltar o dedo' },
   { nome: 'mola-folha', duracao: 0.33, bounce: 0, uso: 'folha e troca de tela, sem pulo' },
@@ -70,9 +72,20 @@ function linear(pontos) {
   return `linear(${partes.join(', ')})`;
 }
 
-for (const mola of MOLAS) {
-  const { fim, pontos } = amostrar(mola);
-  console.log(`/* ${mola.uso}: duração ${mola.duracao} s, bounce ${mola.bounce} */`);
-  console.log(`--${mola.nome}-ms: ${Math.round(fim * 1000)}ms;`);
-  console.log(`--${mola.nome}: ${linear(simplificar(pontos))};`);
+// Cada mola como o CSS a usa: nome, duração até assentar (ms) e a curva linear().
+export function gerarMolas() {
+  return MOLAS.map((mola) => {
+    const { fim, pontos } = amostrar(mola);
+    return { ...mola, ms: Math.round(fim * 1000), curva: linear(simplificar(pontos)) };
+  });
+}
+
+// Rodado direto (node tools/mola.mjs), imprime as variáveis para colar no app.css. O teste
+// tests/unidade/mola.test.js confere que o app.css tem exatamente o que o script gera.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  for (const mola of gerarMolas()) {
+    console.log(`/* ${mola.uso}: duração ${mola.duracao} s, bounce ${mola.bounce} */`);
+    console.log(`--${mola.nome}-ms: ${mola.ms}ms;`);
+    console.log(`--${mola.nome}: ${mola.curva};`);
+  }
 }
