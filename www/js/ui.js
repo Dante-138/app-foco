@@ -260,6 +260,8 @@ function tornarArrastavel(dialogo, topo, { alturas, fechar, tentarFechar }) {
     if (!arrastando) {
       if (Math.abs(dy) < ARRASTE_MINIMO) return;
       arrastando = true;
+      // A folha pode ainda estar subindo: a animação de abrir venceria o transform do dedo.
+      for (const animacao of dialogo.getAnimations()) animacao.finish();
       dialogo.classList.add('arrastando');
     }
     // Para cima a folha resiste: cresce até a cheia (com alturas) ou quase não sai do lugar.

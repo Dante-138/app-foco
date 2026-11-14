@@ -2188,6 +2188,8 @@ test('folha da tarefa: abre na metade, sobe e fecha arrastando o topo', async (t
   await visivel(pagina.getByText('Pagar a conta'));
 
   const arrastar = async (dy) => {
+    // Mede o topo só com a folha parada (a abertura anima por uns 500 ms).
+    await pagina.waitForFunction(() => document.querySelector('dialog[open]').getAnimations().length === 0);
     const topo = await pagina.locator('dialog[open] .folha-topo').boundingBox();
     const x = topo.x + topo.width / 2;
     const y = topo.y + 8;
