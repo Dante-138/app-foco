@@ -68,7 +68,33 @@ const anotarLote = (rotina, tamanho) => lotes.set(rotina.id, [...(lotes.get(roti
 // A área de marcados pode ser recolhida; começa aberta.
 let marcadosAbertos = true;
 
-function alternarItem(rotina, item) {
+// Resposta ao marcar, como no Keep: a caixa preenche e o texto risca no lugar; um instante
+// depois a linha desliza para fora e a lista é redesenhada, com o item na outra área.
+// A marca é gravada na hora: nada depende de a animação terminar.
+const MOSTRAR_MARCA_MS = 380;
+const SAIR_MS = 260;
+let esperaRedesenho = null;
+let recemMovido = null; // id do item que acabou de mudar de área: chega com animação
+let pulsarContador = false; // o contador de marcados reage quando ganha um item
+const semMovimento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Item que vai mudar de área: marca no lugar, espera e sai. "botao" é a linha tocada.
+function animarMudanca(botao, marcou) {
+  botao.classList.toggle('feito', marcou);
+  botao.setAttribute('aria-checked', String(marcou));
+  botao.classList.add('marcando');
+  const li = botao.closest('li');
+  li.style.setProperty('height', `${li.offsetHeight}px`);
+  li.classList.add('mudando-de-area');
+  setTimeout(() => li.classList.add('saindo'), MOSTRAR_MARCA_MS);
+  // Um só redesenho, depois do último toque: marcar vários seguidos não corta a animação.
+  clearTimeout(esperaRedesenho);
+  esperaRedesenho = setTimeout(redesenhar, MOSTRAR_MARCA_MS + SAIR_MS);
+}
+
+// Marcar ou desmarcar um item. Pela aba Rotinas vem "botao" (a linha tocada) e há animação;
+// pelo painel não vem, e a lista é redesenhada na hora.
+function alternarItem(rotina, item, botao = null) {
   const marcas = marcasDeHoje();
   const atuais = new Set(marcas[rotina.id] ?? []);
   const marcou = !atuais.has(item.id);
@@ -78,9 +104,19 @@ function alternarItem(rotina, item) {
   else lotes.delete(rotina.id);
   marcas[rotina.id] = [...atuais]; // a ordem da lista é a ordem em que os itens foram marcados
   acertarHabitoLigado(item, marcou);
-  vibrar('toque');
+  // Fechar a rotina do dia ganha o efeito de sucesso; as outras marcas, um toque leve.
+  const totalDeItens = rotina.itens.filter((i) => i.tipo === 'item').length;
+  vibrar(marcou && atuais.size === totalDeItens ? 'concluido' : 'toque');
   salvar();
-  redesenhar();
+
+  if (!botao) {
+    redesenhar();
+    return;
+  }
+  recemMovido = item.id;
+  pulsarContador = marcou;
+  if (estado.marcadosNoFim && !semMovimento()) animarMudanca(botao, marcou);
+  else redesenhar();
 }
 
 // Desfazer: volta a última marca, ou a seção inteira quando ela foi marcada de uma vez.
@@ -426,10 +462,10 @@ function linha(rotina, item, marcadas, comHoras) {
       'button',
       {
         type: 'button',
-        class: `rotina-item${feito ? ' feito' : ''}`,
+        class: `rotina-item${feito ? ' feito' : ''}${item.id === recemMovido ? ' chegou' : ''}`,
         role: 'checkbox',
         'aria-checked': String(feito),
-        onclick: () => alternarItem(rotina, item),
+        onclick: (e) => alternarItem(rotina, item, e.currentTarget),
       },
       h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
       comHoras ? h('span', { class: 'hora' }, item.hora ?? '') : null,
@@ -462,7 +498,7 @@ function areasDaRotina(rotina, marcadas, comHoras) {
             'button',
             {
               type: 'button',
-              class: 'concluidas-topo',
+              class: `concluidas-topo${pulsarContador ? ' pulsa' : ''}`,
               'aria-expanded': String(marcadosAbertos),
               onclick: () => {
                 marcadosAbertos = !marcadosAbertos;
@@ -622,6 +658,9 @@ function render(raiz) {
     ...corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens: itens.length > 0 }),
   );
   faixa.scrollLeft = rolagemFaixa;
+  // As animações de chegada e do contador são só do desenho logo depois do toque.
+  recemMovido = null;
+  pulsarContador = false;
   // A rotina aberta fica sempre à vista na faixa (ela pode ter mudado de lugar ou ser uma cópia nova).
   faixa.querySelector('.chip.ativo')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }

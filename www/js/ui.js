@@ -373,14 +373,21 @@ export function aoSegurar(elemento, acao) {
   );
 }
 
-// Resposta tátil: um toque curto ao marcar, dois pulsos ao concluir.
-// Só vibra onde o aparelho tem motor e o app tem permissão (no Android, VIBRATE);
-// nos outros lugares a chamada não faz nada.
+// Resposta tátil. No app Android vai pelo motor háptico do aparelho (plugin Haptics do
+// Capacitor): "toque" é um impacto leve, ao marcar; "concluido" é o efeito de sucesso do
+// sistema, ao concluir. No navegador, navigator.vibrate faz um toque curto ou dois pulsos.
+// Onde não há motor nem permissão, a chamada não faz nada.
 const VIBRACAO = { toque: 8, concluido: [12, 70, 22] };
+const HAPTICA = {
+  toque: (motor) => motor.impact({ style: 'LIGHT' }),
+  concluido: (motor) => motor.notification({ type: 'SUCCESS' }),
+};
 
 export function vibrar(tipo) {
+  const motor = window.Capacitor?.Plugins?.Haptics;
   try {
-    navigator.vibrate?.(VIBRACAO[tipo]);
+    if (motor) HAPTICA[tipo](motor)?.catch?.(() => {});
+    else navigator.vibrate?.(VIBRACAO[tipo]);
   } catch {
     /* sem vibração neste aparelho */
   }

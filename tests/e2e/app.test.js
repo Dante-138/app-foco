@@ -336,6 +336,102 @@ test('rotina: o que foi digitado na edição é gravado na hora em que o app vai
   assert.deepEqual(erros, []);
 });
 
+test('rotina: ao marcar, o item fica marcado no lugar um instante e depois vai para os marcados', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await criarRotinaDaManha(pagina);
+
+  // O toque e a leitura no mesmo passo, para ver a tela logo depois do toque.
+  const logoDepois = await pagina.evaluate((chave) => {
+    const botaoDoItem = [...document.querySelectorAll('.area-pendentes .rotina-item')].find((b) =>
+      b.textContent.includes('Levantar'),
+    );
+    botaoDoItem.click();
+    const linha = botaoDoItem.closest('li');
+    return {
+      naAreaDeCima: Boolean(linha.closest('.area-pendentes')),
+      classes: [...botaoDoItem.classList],
+      marcado: botaoDoItem.getAttribute('aria-checked'),
+      saindo: linha.classList.contains('mudando-de-area'),
+      gravado: Object.values(JSON.parse(localStorage.getItem(chave)).marcasRotina.porRotina)[0]?.length,
+    };
+  }, CHAVE);
+  assert.deepEqual(logoDepois, {
+    naAreaDeCima: true,
+    classes: ['rotina-item', 'feito', 'marcando'],
+    marcado: 'true',
+    saindo: true,
+    gravado: 1,
+  });
+
+  // Depois da animação, o item chega na área de marcados, e o contador reage.
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  const chegada = pagina.locator('.area-marcados .rotina-item', { hasText: 'Levantar' });
+  await visivel(chegada);
+  assert.ok((await chegada.evaluate((el) => [...el.classList])).includes('chegou'));
+  assert.ok((await pagina.locator('.concluidas-topo').evaluate((el) => [...el.classList])).includes('pulsa'));
+
+  // Desmarcar lá embaixo faz o caminho de volta.
+  await chegada.click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  await visivel(pagina.locator('.area-pendentes .rotina-item.chegou', { hasText: 'Levantar' }));
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('resposta tátil: no app Android vai pelo motor háptico; toque leve ao marcar, sucesso ao concluir', async (t) => {
+  const comMotor = (contexto) =>
+    contexto.addInitScript(() => {
+      window.hapticas = [];
+      const registrar = (tipo, valor) => {
+        window.hapticas.push(`${tipo}:${valor}`);
+        return Promise.resolve();
+      };
+      window.Capacitor = {
+        Plugins: {
+          Haptics: {
+            impact: ({ style }) => registrar('impacto', style),
+            notification: ({ type }) => registrar('notificacao', type),
+          },
+        },
+      };
+    });
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          { id: 'i1', tipo: 'item', texto: 'Levantar' },
+          { id: 'i2', tipo: 'item', texto: 'Beber água' },
+        ],
+      },
+    ],
+    habitos: [{ id: 'h', nome: 'Leitura', cor: 'azul', tipo: 'simnao' }],
+  });
+  const { pagina, erros } = await abrir(t, { salvo, preparar: comMotor });
+  const hapticas = () => pagina.evaluate(() => window.hapticas.splice(0));
+
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 2 hoje'));
+  assert.deepEqual(await hapticas(), ['impacto:LIGHT']);
+
+  // O último item fecha a rotina do dia: efeito de sucesso.
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('2 de 2 hoje'));
+  assert.deepEqual(await hapticas(), ['notificacao:SUCCESS']);
+
+  // Hábito: cumprir dá sucesso; pular dá toque leve.
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await botao(pagina, 'Leitura, hoje: feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: pulado'));
+  assert.deepEqual(await hapticas(), ['notificacao:SUCCESS', 'impacto:LIGHT']);
+  assert.deepEqual(erros, []);
+});
+
 test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
   const habito = (id, nome, extra) => ({
     id,
