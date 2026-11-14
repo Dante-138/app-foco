@@ -1,0 +1,39 @@
+# Atualização de dependências pelo Dependabot.
+# Só npm e GitHub Actions. O Gradle fica de fora: as versões do projeto Android são as que o
+# Capacitor define, e atualizá-las por fora pode quebrar o build. Falha de segurança em qualquer
+# ecossistema continua chegando pelos alertas do repositório.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Sao_Paulo
+    # Um PR por vez, com todas as atualizações da semana juntas.
+    open-pull-requests-limit: 1
+    groups:
+      npm:
+        patterns: ['*']
+    # Prefixo sem escopo, para o título caber nos 72 caracteres do portão de commits.
+    commit-message:
+      prefix: chore
+    ignore:
+      # Trocar a versão maior do Capacitor é uma migração, com passos no projeto Android.
+      - dependency-name: '@capacitor/*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
