@@ -5,7 +5,7 @@
 import { estado, marcasDeHoje } from './store.js';
 import { hoje } from './nucleo/datas.js';
 import { resumoDoDia } from './nucleo/painel.js';
-import { rotuloData } from './nucleo/prazos.js';
+import { quantoFalta, rotuloData } from './nucleo/prazos.js';
 import { h, svg, icone, estadoVazio } from './ui.js';
 import { rotinas, alternarItemDaRotina } from './rotinas.js';
 import { tarefas, concluirTarefa } from './tarefas.js';
@@ -108,7 +108,12 @@ function blocoDasTarefas(resumo, dia) {
       {},
       resumo.primeiras.map((tarefa) => {
         const atrasada = tarefa.prazo < dia;
-        const quando = [atrasada ? rotuloData(tarefa.prazo, dia) : null, tarefa.hora]
+        // A atrasada mostra a data que tinha e há quanto venceu; a data não muda.
+        const quando = [
+          atrasada ? rotuloData(tarefa.prazo, dia) : null,
+          tarefa.hora,
+          atrasada ? quantoFalta(tarefa.prazo, dia) : null,
+        ]
           .filter(Boolean)
           .join(', ');
         return h(

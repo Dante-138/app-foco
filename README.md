@@ -17,9 +17,13 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
-  faixa e excluir.
+  faixa e excluir. Toda pendente com prazo mostra a contagem regressiva ("em 6 dias"); a
+  atrasada fica em vermelho, com a data que tinha e há quanto venceu. "Nova conta mensal" (no
+  menu da lista ou no atalho da tarefa nova) cria a conta já repetindo todo mês, com o valor
+  no título.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
-  às 9h quando só tem a data.
+  às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
+  se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo.
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
