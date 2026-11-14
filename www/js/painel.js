@@ -229,7 +229,9 @@ function render(raiz) {
   });
   const { tarefas: deHoje } = resumo;
 
-  raiz.replaceChildren(
+  // Os blocos de sequências e de tarefas devolvem null quando não há o que mostrar, e o
+  // replaceChildren do navegador escreveria a palavra "null" na tela: só entra o que é elemento.
+  const blocos = [
     h('p', { class: 'painel-data' }, fmtDia.format(new Date())),
     blocoDaRotina(rotina, resumo.rotina),
     h(
@@ -246,7 +248,8 @@ function render(raiz) {
     ),
     blocoDasSequencias(resumo.emRisco),
     blocoDasTarefas(deHoje, dia),
-  );
+  ];
+  raiz.replaceChildren(...blocos.filter(Boolean));
 }
 
 export const painel = {

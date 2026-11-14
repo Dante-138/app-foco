@@ -1646,9 +1646,19 @@ test('painel: o item do horário atual, quanto falta para o próximo e as sequê
   const emRisco = () =>
     pagina.locator('.painel-bloco', { hasText: 'Sequências em risco' }).locator('.tarefa').allTextContents();
 
+  // Bloco vazio não deixa texto solto na tela: o Painel só tem elementos, nunca a palavra "null".
+  const soElementos = () =>
+    pagina.evaluate(() => {
+      const conteudo = document.querySelector('#conteudo');
+      return (
+        [...conteudo.childNodes].every((no) => no.nodeType === 1) && !conteudo.textContent.includes('null')
+      );
+    });
+
   // 07:10: o item das 07:00 é o de agora; o das 06:30 ficou para trás; o das 09:00 aparece com a contagem.
   await visivel(pagina.getByText('1 de 7 · 1 atrasado'));
   assert.deepEqual(await linhas(), ['07:00Caféagora', 'Mochila', 'Chave', '09:00Bater o pontoem 1 h 50']);
+  assert.equal(await soElementos(), true, 'sem tarefa para hoje'); // o bloco das tarefas está vazio
 
   // Marcar o item de agora: a lista segue dali, sem a etiqueta.
   await pagina.getByRole('checkbox', { name: /Café/ }).click();
@@ -1682,6 +1692,7 @@ test('painel: o item do horário atual, quanto falta para o próximo e as sequê
     ESPERA,
   );
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h2['2026-11-13'], 8);
+  assert.equal(await soElementos(), true, 'sem tarefa e sem sequência em risco'); // os dois blocos vazios
   assert.deepEqual(erros, []);
 });
 
