@@ -47,7 +47,7 @@ function v1ParaV2(dados) {
 // aqui os passos só sobem o número.
 
 // A v9 acrescenta a hora do lembrete do hábito e quais avisos do dia estão ligados. Não há
-// o que converter: sem os campos, o hábito não tem lembrete e os avisos nascem ligados.
+// o que converter: sem os campos, o hábito não tem lembrete e os avisos nascem no padrão.
 
 // Cada passo sobe uma versão. Altera e devolve o próprio objeto.
 // Quem chama garante que dados.versao é um inteiro entre 1 e VERSAO.

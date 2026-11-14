@@ -1797,13 +1797,22 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
       return `${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }, aviso.schedule.at);
 
-  // Ao abrir: sete resumos, sete revisões e a rotina de hoje e de amanhã no relógio.
+  // Ao abrir: sete resumos e sete revisões. A rotina no relógio nasce desligada.
   const [manha] = await avisos('manha', 7);
   assert.deepEqual([manha.title, manha.body], ['Hoje, sáb., 14 de nov.', 'Rotina Manhã · 2 hábitos']);
   assert.equal(await horaLocal(manha), '14 07:00');
   const [noite] = await avisos('noite', 7);
   assert.deepEqual([noite.title, noite.body], ['Revisão do dia', 'Faltam: 2 hábitos e 3 itens da rotina.']);
   assert.equal(await horaLocal(noite), '14 22:00');
+  await avisos('rotina', 0);
+
+  // Ligada em Ajustes, a rotina de hoje e de amanhã passa a avisar no relógio.
+  await botao(pagina, 'Ajustes').click();
+  const rotinaNoRelogio = pagina.getByRole('switch', { name: /Rotina no relógio/ });
+  assert.equal(await rotinaNoRelogio.getAttribute('aria-checked'), 'false');
+  await rotinaNoRelogio.click();
+  assert.equal(await rotinaNoRelogio.getAttribute('aria-checked'), 'true');
+  await botao(pagina, 'Fechar').click();
   const daRotina = await avisos('rotina', 6);
   assert.deepEqual(
     daRotina.slice(0, 3).map((x) => [x.title, x.body]),

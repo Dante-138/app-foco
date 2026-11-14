@@ -29,7 +29,7 @@
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
 //   lembretes:    verdadeiro agenda as notificações do app (padrão: verdadeiro); desligado, nada avisa
 //   avisosDoDia:  { manha, noite, rotina, habitos }: quais avisos do dia estão ligados (padrão:
-//                 todos; ver avisos-do-dia.js)
+//                 todos menos a rotina; ver avisos-do-dia.js)
 // }
 //
 // Regra de correção: o que dá para aproveitar é corrigido (texto cortado no

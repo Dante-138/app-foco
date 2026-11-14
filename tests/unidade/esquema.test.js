@@ -132,7 +132,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     tarefas: [],
     ordemTarefas: 'data',
     lembretes: true,
-    avisosDoDia: { manha: true, noite: true, rotina: true, habitos: true },
+    avisosDoDia: { manha: true, noite: true, rotina: false, habitos: true },
   });
   assert.deepEqual(avisos, []);
 });
@@ -327,14 +327,15 @@ test('lembrete do hábito: só hora válida; o resto vira null', () => {
   assert.deepEqual(avisos, []);
 });
 
-test('avisos do dia: nascem ligados; só o false explícito desliga; campo estranho sai', () => {
-  const tudo = { manha: true, noite: true, rotina: true, habitos: true };
-  assert.deepEqual(limpar({}).estado.avisosDoDia, tudo);
-  assert.deepEqual(limpar({ avisosDoDia: 'sim' }).estado.avisosDoDia, tudo);
+test('avisos do dia: a rotina no relógio nasce desligada, os outros ligados; campo estranho sai', () => {
+  const padrao = { manha: true, noite: true, rotina: false, habitos: true };
+  assert.deepEqual(limpar({}).estado.avisosDoDia, padrao);
+  assert.deepEqual(limpar({ avisosDoDia: 'sim' }).estado.avisosDoDia, padrao);
   assert.deepEqual(limpar({ avisosDoDia: { noite: false, rotina: null, extra: 1 } }).estado.avisosDoDia, {
-    ...tudo,
+    ...padrao,
     noite: false,
   });
+  assert.deepEqual(limpar({ avisosDoDia: { rotina: true } }).estado.avisosDoDia, { ...padrao, rotina: true });
 });
 
 test('hábito numérico: unidade cortada ou nula, meta inválida vira 1', () => {

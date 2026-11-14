@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AVISOS_DO_DIA,
+  AVISOS_PADRAO,
   DIAS_DE_RESUMO,
   HORA_DA_MANHA,
   HORA_DA_NOITE,
@@ -62,15 +63,25 @@ test('as horas, os limites e as chaves dos avisos', () => {
   assert.deepEqual([...AVISOS_DO_DIA], ['manha', 'noite', 'rotina', 'habitos']);
 });
 
-test('avisosDoDiaValidos: tudo ligado por padrão; só o false explícito desliga', () => {
-  assert.deepEqual(avisosDoDiaValidos(undefined), TUDO);
-  for (const errado of [null, 'x', 3, []]) assert.deepEqual(avisosDoDiaValidos(errado), TUDO);
-  assert.deepEqual(avisosDoDiaValidos({ manha: false, rotina: 0, habitos: 'não', lixo: true }), {
+test('avisosDoDiaValidos: a rotina no relógio nasce desligada e os outros ligados; só lógico explícito muda', () => {
+  const padrao = { manha: true, noite: true, rotina: false, habitos: true };
+  assert.deepEqual({ ...AVISOS_PADRAO }, padrao);
+  assert.deepEqual(avisosDoDiaValidos(undefined), padrao);
+  for (const errado of [null, 'x', 3, []]) assert.deepEqual(avisosDoDiaValidos(errado), padrao);
+  // Valor que não é verdadeiro nem falso fica com o padrão da chave; chave estranha sai.
+  assert.deepEqual(avisosDoDiaValidos({ manha: false, rotina: 1, habitos: 'não', lixo: true }), {
     manha: false,
     noite: true,
+    rotina: false,
+    habitos: true,
+  });
+  assert.deepEqual(avisosDoDiaValidos({ rotina: true, noite: false }), {
+    manha: true,
+    noite: false,
     rotina: true,
     habitos: true,
   });
+  assert.deepEqual(avisosDoDiaValidos(TUDO), TUDO);
 });
 
 test('tudo desligado, ou app sem dados: plano vazio', () => {

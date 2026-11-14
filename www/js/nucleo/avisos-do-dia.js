@@ -17,12 +17,21 @@ export const DIAS_DE_RESUMO = 7;
 export const MAXIMO_DA_ROTINA = 40;
 export const MAXIMO_DE_HABITOS = 30;
 
-// Quais avisos estão ligados (estado.avisosDoDia). Tudo ligado por padrão.
+// Quais avisos estão ligados (estado.avisosDoDia). O resumo, a revisão e o lembrete dos
+// hábitos nascem ligados. A rotina no relógio nasce desligada: uma rotina com muitos horários
+// vira muitas notificações por dia, então quem quer liga em Ajustes.
 export const AVISOS_DO_DIA = Object.freeze(['manha', 'noite', 'rotina', 'habitos']);
+export const AVISOS_PADRAO = Object.freeze({ manha: true, noite: true, rotina: false, habitos: true });
 
+// Só verdadeiro ou falso explícito muda o padrão; qualquer outra coisa fica com ele.
 export function avisosDoDiaValidos(valor) {
   const origem = valor !== null && typeof valor === 'object' ? valor : {};
-  return Object.fromEntries(AVISOS_DO_DIA.map((chave) => [chave, origem[chave] !== false]));
+  return Object.fromEntries(
+    AVISOS_DO_DIA.map((chave) => [
+      chave,
+      typeof origem[chave] === 'boolean' ? origem[chave] : AVISOS_PADRAO[chave],
+    ]),
+  );
 }
 
 const contar = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
