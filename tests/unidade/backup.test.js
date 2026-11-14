@@ -28,6 +28,7 @@ function comDados() {
         unidade: null,
         meta: null,
         arquivado: true,
+        diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
         lembrete: '21:30',
       },
     ],

@@ -8,6 +8,7 @@
 
 import { estado, marcasDeHoje } from './store.js';
 import { agoraLocal } from './nucleo/datas.js';
+import { valeNoDia } from './nucleo/habito-calculo.js';
 import { planejar } from './nucleo/lembretes.js';
 import { planejarDoDia } from './nucleo/avisos-do-dia.js';
 import { mudancas } from './nucleo/sincronia.js';
@@ -66,7 +67,7 @@ function planoEm(agoraDasTarefas, agoraDoDia) {
       habitos: estado.habitos,
       registros: estado.registros,
       tarefas: estado.tarefas,
-      habitoVale: () => true,
+      habitoVale: valeNoDia,
     },
     estado.avisosDoDia,
     agoraDoDia,

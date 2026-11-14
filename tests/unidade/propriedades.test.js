@@ -12,7 +12,7 @@ import { VERSAO } from '../../www/js/nucleo/migracao.js';
 import { PROBLEMA, lerEstado } from '../../www/js/nucleo/estado.js';
 import { MOTIVO, gerarBackup, lerBackup } from '../../www/js/nucleo/backup.js';
 import { UNIDADES } from '../../www/js/nucleo/repeticao.js';
-import { pontuacao, sequencias } from '../../www/js/nucleo/habito-calculo.js';
+import { pontuacao, sequencias, valeNoDia } from '../../www/js/nucleo/habito-calculo.js';
 import { somaDias } from '../../www/js/nucleo/datas.js';
 import {
   AVISOS_DO_DIA,
@@ -81,6 +81,7 @@ const habito = registro({
   unidade: talvez(fc.option(curto)),
   meta: talvez(fc.option(fc.oneof(fc.integer({ min: -2, max: 50 }), fc.double({ noNaN: true })))),
   arquivado: logico,
+  diasDaSemana: talvez(fc.oneof(fc.array(fc.integer({ min: -1, max: 8 }), { maxLength: 9 }), curto)),
   lembrete: talvez(hora),
 });
 const marca = fc.oneof(
@@ -95,16 +96,14 @@ const tarefa = registro({
   notas: talvez(curto),
   prazo: talvez(fc.option(dia)),
   hora: talvez(hora),
-  // Metade das repetições sai completa; a outra metade pode vir sem um dos campos ou com valor errado.
   repeticao: talvez(
     fc.option(
-      fc.oneof(
-        fc.record({ cada: fc.integer({ min: 1, max: 99 }), unidade: fc.constantFrom(...UNIDADES) }),
-        registro({
-          cada: talvez(fc.integer({ min: -1, max: 120 })),
-          unidade: talvez(fc.constantFrom(...UNIDADES, 'seculo')),
-        }),
-      ),
+      // As duas chaves sempre presentes: sem elas a repetição quase nunca seria válida e o
+      // gerador deixaria de cobrir tarefas que repetem (chave ausente fica com os testes do esquema).
+      fc.record({
+        cada: talvez(fc.integer({ min: -1, max: 120 })),
+        unidade: talvez(fc.constantFrom(...UNIDADES, 'seculo')),
+      }),
     ),
   ),
   estrela: logico,
@@ -260,6 +259,10 @@ test('propriedade: a pontuação fica entre 0 e 1 e a sequência atual nunca pas
       arquivado: false,
     })),
   );
+  // Dias da semana em que o hábito vale: de um a sete, sem repetir, em ordem.
+  const dias = fc
+    .uniqueArray(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 })
+    .map((d) => d.sort((a, b) => a - b));
   // Dias de 60 antes a 5 depois de hoje, com as marcas que o formato aceita.
   const marcas = fc.dictionary(
     fc.integer({ min: -60, max: 5 }).map((n) => somaDias(DIA, n)),
@@ -267,7 +270,8 @@ test('propriedade: a pontuação fica entre 0 e 1 e a sequência atual nunca pas
     { maxKeys: 40 },
   );
   fc.assert(
-    fc.property(habitoValido, marcas, (habitoGerado, registroGerado) => {
+    fc.property(habitoValido, dias, marcas, (habitoBase, diasDaSemana, registroGerado) => {
+      const habitoGerado = { ...habitoBase, diasDaSemana };
       const pontos = pontuacao(habitoGerado, registroGerado, DIA);
       assert.ok(pontos >= 0 && pontos <= 1 + 1e-9, `pontuação fora do intervalo: ${pontos}`);
 
@@ -276,6 +280,23 @@ test('propriedade: a pontuação fica entre 0 e 1 e a sequência atual nunca pas
       assert.ok(Number.isInteger(atual) && Number.isInteger(melhor));
       assert.ok(atual >= 0 && atual <= melhor, `atual ${atual}, melhor ${melhor}`);
       assert.ok(melhor <= diasAteHoje, `melhor ${melhor} com ${diasAteHoje} dias registrados`);
+    }),
+    OPCOES,
+  );
+});
+
+test('propriedade: hábito com os sete dias conta igual a hábito sem a lista de dias', () => {
+  const marcas = fc.dictionary(
+    fc.integer({ min: -60, max: 5 }).map((n) => somaDias(DIA, n)),
+    fc.constantFrom('feito', 'pulado'),
+    { maxKeys: 40 },
+  );
+  const semLista = { id: 'h', tipo: 'simnao' };
+  const comTodos = { ...semLista, diasDaSemana: [0, 1, 2, 3, 4, 5, 6] };
+  fc.assert(
+    fc.property(marcas, (registroGerado) => {
+      assert.equal(pontuacao(comTodos, registroGerado, DIA), pontuacao(semLista, registroGerado, DIA));
+      assert.deepEqual(sequencias(comTodos, registroGerado, DIA), sequencias(semLista, registroGerado, DIA));
     }),
     OPCOES,
   );
@@ -300,7 +321,7 @@ test('propriedade: o plano dos avisos do dia só tem avisos futuros, em ordem, s
         habitos: estado.habitos,
         registros: estado.registros,
         tarefas: estado.tarefas,
-        habitoVale: () => true,
+        habitoVale: valeNoDia,
       };
       const plano = planejarDoDia(dados, estado.avisosDoDia, agora);
 
@@ -354,6 +375,7 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
   // Se a validação passar a descartar quase tudo, as propriedades acima passam sem provar nada.
   const partes = {
     hábitos: parte((e) => e.habitos.length > 0),
+    'hábitos com dias da semana': parte((e) => e.habitos.some((x) => x.diasDaSemana.length < 7)),
     'rotinas com itens': parte(itensDaRotina),
     'itens ligados a hábito': parte((e) => e.rotinas.some((r) => r.itens.some((i) => i.habitoId))),
     tarefas: parte((e) => e.tarefas.length > 0),

@@ -42,6 +42,7 @@ function valido() {
         unidade: null,
         meta: null,
         arquivado: false,
+        diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
         lembrete: '21:30',
       },
       {
@@ -52,6 +53,7 @@ function valido() {
         unidade: 'copos',
         meta: 2,
         arquivado: true,
+        diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
         lembrete: null,
       },
     ],
@@ -291,6 +293,7 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       unidade: null,
       meta: null,
       arquivado: false,
+      diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
       lembrete: null,
     },
     {
@@ -301,6 +304,7 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       unidade: null,
       meta: null,
       arquivado: false,
+      diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
       lembrete: null,
     },
   ]);
@@ -638,5 +642,25 @@ test('notas dos hábitos: só de hábito existente, com data real e texto; vazia
     limpar({ habitos: [{ id: 'h', nome: 'H', cor: 'azul' }], notasHabito: { h: { '2026-11-11': ' ' } } })
       .estado.notasHabito,
     {},
+  );
+});
+
+test('hábito: dias da semana sem repetir e em ordem; vazio ou inválido vale todos os dias', () => {
+  const { estado } = limpar({
+    habitos: [
+      { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', diasDaSemana: [5, 1, 1, 9, -1, 2.5, 'x', 3] },
+      { id: 'b', nome: 'B', cor: 'rosa', tipo: 'simnao', diasDaSemana: [] },
+      { id: 'c', nome: 'C', cor: 'rosa', tipo: 'simnao', diasDaSemana: 'seg' },
+      { id: 'd', nome: 'D', cor: 'rosa', tipo: 'simnao' },
+    ],
+  });
+  assert.deepEqual(
+    estado.habitos.map((x) => x.diasDaSemana),
+    [
+      [1, 3, 5],
+      [0, 1, 2, 3, 4, 5, 6],
+      [0, 1, 2, 3, 4, 5, 6],
+      [0, 1, 2, 3, 4, 5, 6],
+    ],
   );
 });
