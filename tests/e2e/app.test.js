@@ -1997,9 +1997,11 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   const { pagina, erros } = await abrir(t, { toque: true });
   await visivel(pagina.getByText('Nenhuma rotina ainda'));
 
-  // Dedo para a esquerda: vai para a aba da direita.
-  await deslizar(pagina, [400, 500], [120, 510]);
-  await esperarTitulo(pagina, 'Hábitos - Foco');
+  // A ordem da barra é a do deslize. Na primeira vez o app abre em Rotinas, a terceira.
+  const naBarra = (await pagina.locator('#abas button').allTextContents()).map((nome) => nome.trim());
+  assert.deepEqual(naBarra, ['Painel', 'Hábitos', 'Rotinas', 'Tarefas']);
+
+  // Dedo para a esquerda: vai para a aba da direita, que é a última.
   await deslizar(pagina, [400, 500], [120, 510]);
   await esperarTitulo(pagina, 'Tarefas - Foco');
 
@@ -2008,7 +2010,9 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await visivel(pagina.getByText('Nenhuma tarefa aqui'));
   assert.equal(await pagina.title(), 'Tarefas - Foco');
 
-  // Dedo para a direita: volta. A aba em que a pessoa parou fica salva.
+  // Dedo para a direita: volta uma aba por vez. A aba em que a pessoa parou fica salva.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Rotinas - Foco');
   await deslizar(pagina, [120, 500], [400, 490]);
   await esperarTitulo(pagina, 'Hábitos - Foco');
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'habitos');
@@ -2019,6 +2023,14 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await deslizar(pagina, [250, 500], [280, 500]);
   await visivel(pagina.getByText('Nenhum hábito ainda'));
   assert.equal(await pagina.title(), 'Hábitos - Foco');
+
+  // Mais um para a direita chega à primeira aba, e dali não há para onde voltar.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Painel - Foco');
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await visivel(botao(pagina, 'Painel'));
+  assert.equal(await pagina.title(), 'Painel - Foco');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'painel');
   assert.deepEqual(erros, []);
 });
 
@@ -2074,9 +2086,9 @@ test('deslizar sobre a faixa de rotinas rola a faixa e não troca de aba', async
   await pagina.waitForFunction(() => document.querySelector('.faixa').scrollLeft > 0, null, ESPERA);
   assert.equal(await pagina.title(), 'Rotinas - Foco');
 
-  // O mesmo gesto fora da faixa troca de aba.
+  // O mesmo gesto fora da faixa troca de aba: de Rotinas para a da direita, Tarefas.
   await deslizar(pagina, [400, 600], [120, 600]);
-  await esperarTitulo(pagina, 'Hábitos - Foco');
+  await esperarTitulo(pagina, 'Tarefas - Foco');
   assert.deepEqual(erros, []);
 });
 

@@ -22,7 +22,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo.
-- **Gestos**: deslizar o dedo para o lado troca de aba.
+- **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
+  Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 - **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
   O app confere o que foi colado e pede confirmação antes de substituir.
