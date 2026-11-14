@@ -249,6 +249,29 @@ test('termos: reprova sem diferenciar maiúscula nem acento, só a palavra intei
   assert.deepEqual(problemasDaMensagem('feat: add tabs\n\nZélia'), []);
 });
 
+// Termo de várias palavras: qualquer separador entre elas reprova. Um teste por forma.
+const TERMO_COMPOSTO = ['Fulano Silva'];
+const FORMAS_DO_TERMO = {
+  'espaço duplo': 'Fulano  Silva',
+  'quebra de linha': 'Fulano\nSilva',
+  sublinhado: 'fulano_silva',
+  hífen: 'fulano-silva',
+  ponto: 'fulano.silva',
+  'tabulação e acento': 'FULANO\tSílva',
+};
+for (const [forma, trecho] of Object.entries(FORMAS_DO_TERMO)) {
+  test(`termos de várias palavras, separados por ${forma}: reprova`, () => {
+    assert.deepEqual(problemasDaMensagem(`docs: add notes\n\nTexto de ${trecho}.`, '', TERMO_COMPOSTO), [
+      'contém o termo proibido nº 1 da lista',
+    ]);
+  });
+}
+
+test('termos de várias palavras: juntas são outra palavra, e termo só com símbolos não reprova', () => {
+  assert.deepEqual(problemasDaMensagem('docs: add notes\n\nfulanosilva', '', TERMO_COMPOSTO), []);
+  assert.deepEqual(problemasDaMensagem('docs: add notes\n\n- - -', '', ['- -']), []);
+});
+
 test('termos pela linha de comando: do ambiente e do arquivo, o aviso só com o número', (t) => {
   const pasta = mkdtempSync(join(tmpdir(), 'foco-termos-'));
   t.after(() => rmSync(pasta, { recursive: true, force: true, maxRetries: 3 }));

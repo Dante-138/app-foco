@@ -73,10 +73,17 @@ export function lerTermos(texto) {
     .filter(Boolean);
 }
 
-// O termo inteiro, não pedaço de palavra: "ana" não reprova "banana".
+// O termo inteiro, não pedaço de palavra: "ana" não reprova "banana". Num termo de várias
+// palavras, qualquer separador entre elas conta: espaço duplo, quebra de linha, "_", "-", ".".
+const SEPARADOR = '[^\\p{L}\\p{N}]';
 function contemTermo(textoNormalizado, termo) {
-  const escapado = normalizar(termo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapado}($|[^\\p{L}\\p{N}])`, 'u').test(textoNormalizado);
+  // Cada palavra só tem letras e algarismos: não precisa escapar nada para a expressão regular.
+  const palavras = normalizar(termo)
+    .split(new RegExp(`${SEPARADOR}+`, 'u'))
+    .filter(Boolean);
+  if (palavras.length === 0) return false;
+  const corpo = palavras.join(`${SEPARADOR}+`);
+  return new RegExp(`(^|${SEPARADOR})${corpo}($|${SEPARADOR})`, 'u').test(textoNormalizado);
 }
 
 export function problemasDosTermos(texto, termos) {
