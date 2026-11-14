@@ -2176,3 +2176,38 @@ test('fonte: a Inter vem do próprio app e carrega com a política de segurança
   assert.match(fonte.corpo, /^"?Inter"?,/);
   assert.deepEqual(erros, []);
 });
+
+test('prazos: contagem regressiva no grupo da data e "venceu há" na atrasada, sem mudar o prazo', async (t) => {
+  const diaSP = (deslocamento) =>
+    new Date(Date.now() + deslocamento * 86_400_000).toLocaleDateString('sv-SE', {
+      timeZone: 'America/Sao_Paulo',
+    });
+  const tarefa = (id, titulo, prazo) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo,
+    hora: null,
+    estrela: false,
+    feita: false,
+    criadaEm: 1,
+    feitaEm: null,
+  });
+  const atrasadaEm = diaSP(-3);
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Contas' }],
+    tarefas: [tarefa('t1', 'Fatura do cartão', atrasadaEm), tarefa('t2', 'Aluguel', diaSP(5))],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+
+  await visivel(pagina.getByRole('heading', { name: 'Atrasadas' }));
+  const atrasada = pagina.locator('.tarefa', { hasText: 'Fatura do cartão' }).locator('.tarefa-sub.atrasada');
+  assert.match(await atrasada.textContent(), /^venceu há 3 dias, /);
+  await visivel(pagina.getByRole('heading', { name: /· em 5 dias$/ }));
+  const salvas = JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  assert.equal(salvas.find((x) => x.id === 't1').prazo, atrasadaEm);
+  assert.deepEqual(erros, []);
+});

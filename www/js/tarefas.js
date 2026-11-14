@@ -5,7 +5,7 @@ import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
-import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
+import { agrupar, contagemRegressiva, ordenar, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
 import {
@@ -396,17 +396,25 @@ function menuLista(lista) {
 // --------------------------------------------------------------- desenho
 
 // comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
-function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
-  const detalhes = [];
-  // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
+// Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
+// Pendente fora dos grupos de data (atrasada ou lista sem grupos) diz também quanto falta.
+function quandoDaTarefa(tarefa, { atrasada, comPrazo }) {
   const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
-  const quando = [
+  const contagem = mostrarData && !tarefa.feita ? contagemRegressiva(tarefa.prazo, hoje()) : null;
+  return [
+    atrasada ? contagem : null,
     mostrarData ? rotuloData(tarefa.prazo, hoje()) : null,
+    atrasada ? null : contagem,
     tarefa.hora,
     tarefa.repeticao ? `repete ${descrever(tarefa.repeticao)}` : null,
   ]
     .filter(Boolean)
     .join(', ');
+}
+
+function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
+  const detalhes = [];
+  const quando = quandoDaTarefa(tarefa, { atrasada, comPrazo });
   if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;

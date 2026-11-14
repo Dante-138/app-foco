@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agrupar, ordenar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
+import { agrupar, contagemRegressiva, ordenar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
 
 const HOJE = '2026-11-12';
 
@@ -179,4 +179,13 @@ test('ordenar com ordem desconhecida usa o prazo, e nunca altera a lista recebid
   assert.deepEqual(titulos(ordenar(lista, 'data')), ['dia 20', 'sem data']);
   assert.deepEqual(titulos(ordenar(lista, 'qualquer coisa')), ['dia 20', 'sem data']);
   assert.deepEqual(lista, copia);
+});
+
+test('contagem regressiva: hoje, amanhã, em N dias e há quanto venceu, atravessando o mês', () => {
+  const dia = '2026-11-14';
+  assert.equal(contagemRegressiva('2026-11-14', dia), 'hoje');
+  assert.equal(contagemRegressiva('2026-11-15', dia), 'amanhã');
+  assert.equal(contagemRegressiva('2026-12-01', dia), 'em 17 dias');
+  assert.equal(contagemRegressiva('2026-11-13', dia), 'venceu ontem');
+  assert.equal(contagemRegressiva('2026-10-31', dia), 'venceu há 14 dias');
 });

@@ -5,7 +5,7 @@
 import { estado, marcasDeHoje } from './store.js';
 import { hoje } from './nucleo/datas.js';
 import { resumoDoDia } from './nucleo/painel.js';
-import { rotuloData } from './nucleo/prazos.js';
+import { contagemRegressiva } from './nucleo/prazos.js';
 import { h, svg, icone, estadoVazio } from './ui.js';
 import { rotinas, alternarItemDaRotina } from './rotinas.js';
 import { tarefas, concluirTarefa } from './tarefas.js';
@@ -108,7 +108,7 @@ function blocoDasTarefas(resumo, dia) {
       {},
       resumo.primeiras.map((tarefa) => {
         const atrasada = tarefa.prazo < dia;
-        const quando = [atrasada ? rotuloData(tarefa.prazo, dia) : null, tarefa.hora]
+        const quando = [atrasada ? contagemRegressiva(tarefa.prazo, dia) : null, tarefa.hora]
           .filter(Boolean)
           .join(', ');
         return h(

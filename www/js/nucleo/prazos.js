@@ -1,6 +1,6 @@
 // Ordenação e agrupamento das tarefas por prazo.
 
-import { deIso, somaDias } from './datas.js';
+import { deIso, diasEntre, somaDias } from './datas.js';
 
 const fmtCurta = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
 const fmtComAno = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -9,6 +9,16 @@ const fmtComAno = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'sho
 export function rotuloData(iso, dia) {
   const data = deIso(iso);
   return data.getFullYear() === deIso(dia).getFullYear() ? fmtCurta.format(data) : fmtComAno.format(data);
+}
+
+// Quanto falta para o prazo, ou há quanto venceu: "hoje", "amanhã", "em 3 dias", "venceu ontem",
+// "venceu há 4 dias". A data da tarefa não muda: atrasada continua com o prazo que tinha.
+export function contagemRegressiva(prazo, dia) {
+  const n = diasEntre(dia, prazo);
+  if (n === 0) return 'hoje';
+  if (n === 1) return 'amanhã';
+  if (n > 1) return `em ${n} dias`;
+  return n === -1 ? 'venceu ontem' : `venceu há ${-n} dias`;
 }
 
 // No mesmo dia: as com horário primeiro, na ordem do relógio; depois as sem horário.
@@ -61,7 +71,7 @@ export function agrupar(pendentes, dia) {
     else if (t.prazo < dia) grupo('atrasadas', 'Atrasadas', true).tarefas.push(t);
     else if (t.prazo === dia) grupo('hoje', 'Hoje').tarefas.push(t);
     else if (t.prazo === amanha) grupo('amanha', 'Amanhã').tarefas.push(t);
-    else grupo(t.prazo, rotuloData(t.prazo, dia)).tarefas.push(t);
+    else grupo(t.prazo, `${rotuloData(t.prazo, dia)} · ${contagemRegressiva(t.prazo, dia)}`).tarefas.push(t);
   }
   return grupos;
 }
