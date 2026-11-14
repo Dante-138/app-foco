@@ -14,7 +14,7 @@
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
-//                    arquivado }]
+//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos) }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
 //   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
 //   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
@@ -36,6 +36,7 @@
 import { dataValida, horaValida } from './datas.js';
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
+import { TODOS_OS_DIAS } from './habito-calculo.js';
 import { repeticaoValida } from './repeticao.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
@@ -119,8 +120,18 @@ function sanearHabitos(valor, avisos) {
       unidade: numerico ? cortar(habito.unidade, LIMITES.unidade) || null : null,
       meta: numerico ? (numeroValido(habito.meta) && habito.meta > 0 ? habito.meta : 1) : null,
       arquivado: habito.arquivado === true,
+      diasDaSemana: sanearDiasDaSemana(habito.diasDaSemana),
     };
   });
+}
+
+// Dias da semana (0 a 6, sem repetir, em ordem). Lista vazia ou inválida vale todos os dias.
+function sanearDiasDaSemana(valor) {
+  if (!Array.isArray(valor)) return [...TODOS_OS_DIAS];
+  const dias = [...new Set(valor.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort(
+    (a, b) => a - b,
+  );
+  return dias.length ? dias : [...TODOS_OS_DIAS];
 }
 
 const marcaValida = (v) => v === 'feito' || v === 'pulado' || numeroValido(v);
