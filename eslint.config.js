@@ -122,7 +122,7 @@ export default [
 
   // ---------------------------------------- ferramentas, testes e config (Node)
   {
-    files: ['tools/**/*.mjs', 'tests/**/*.js', '*.config.js'],
+    files: ['tools/**/*.mjs', 'tests/**/*.js', '*.config.js', '*.config.mjs'],
     languageOptions: { globals: globals.node },
   },
   // Nos testes de ponta a ponta, as funções passadas a pagina.evaluate() rodam no navegador.
