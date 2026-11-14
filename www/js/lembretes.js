@@ -9,7 +9,7 @@
 import { estado, marcasDeHoje } from './store.js';
 import { agoraLocal } from './nucleo/datas.js';
 import { valeNoDia } from './nucleo/habito-calculo.js';
-import { planejar } from './nucleo/lembretes.js';
+import { MAXIMO_DE_LEMBRETES, planejar } from './nucleo/lembretes.js';
 import { planejarDoDia } from './nucleo/avisos-do-dia.js';
 import { mudancas } from './nucleo/sincronia.js';
 
@@ -49,11 +49,13 @@ export async function pedirPermissaoSeFaltar() {
 }
 
 // O plano inteiro: tarefas e avisos do dia, sem número de notificação repetido. Os dois
-// momentos são separados para dar também o plano "sem olhar o relógio" (ver sincronizar).
-function planoEm(agoraDasTarefas, agoraDoDia) {
+// momentos são separados para dar também o plano "sem olhar o relógio" (ver aplicarPlano), e
+// esse sai sem limite de quantidade: o limite é do que fica agendado, não do que continua valendo.
+function planoEm(agoraDasTarefas, agoraDoDia, { semLimite = false } = {}) {
   if (!estado.lembretes) return [];
   const rotina = estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? null;
-  const dasTarefas = planejar(estado.tarefas, estado.listas, agoraDasTarefas).map((lembrete) => ({
+  const maximo = semLimite ? Infinity : MAXIMO_DE_LEMBRETES;
+  const dasTarefas = planejar(estado.tarefas, estado.listas, agoraDasTarefas, maximo).map((lembrete) => ({
     ...lembrete,
     tipo: 'tarefa',
     dia: lembrete.quando.slice(0, 10),
@@ -71,6 +73,7 @@ function planoEm(agoraDasTarefas, agoraDoDia) {
     },
     estado.avisosDoDia,
     agoraDoDia,
+    { semLimite },
   );
   const vistos = new Set();
   return [...dasTarefas, ...doDia].filter((aviso) => {
@@ -115,7 +118,10 @@ async function aplicarPlano() {
   const plano = planoEm(agora, agora);
   // O mesmo plano sem olhar o relógio: o aviso que só passou da hora continua na tela do
   // celular; o que foi resolvido (tarefa concluída, hábito marcado) é cancelado e some.
-  const vivos = new Set(planoEm('', `${agora.slice(0, 10)}T00:00`).map((aviso) => aviso.id));
+  // Sem limite: com muitas tarefas atrasadas, o corte dos 60 mais antigos tiraria daqui o
+  // aviso entregue hoje, e ele seria cancelado sem a tarefa ter sido resolvida.
+  const inicioDoDia = `${agora.slice(0, 10)}T00:00`;
+  const vivos = new Set(planoEm('', inicioDoDia, { semLimite: true }).map((aviso) => aviso.id));
   try {
     // Sem permissão não agenda, e também não pede: o pedido tem hora certa (ver acima).
     if ((await notificacoes.checkPermissions()).display !== 'granted') {

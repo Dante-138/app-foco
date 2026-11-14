@@ -1714,6 +1714,68 @@ test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo',
   assert.deepEqual(erros, []);
 });
 
+test('lembretes: com 60 tarefas atrasadas, o lembrete que só passou da hora não é cancelado', async (t) => {
+  // O relógio começa no sábado, 14/11/2026, às 10:00. Sessenta tarefas venceram ontem (é o
+  // limite de lembretes agendados) e uma reunião avisa às 10:01.
+  const atrasadas = Array.from({ length: 60 }, (_, i) => ({
+    id: `a${i}`,
+    listaId: 'l',
+    titulo: `Atrasada ${i}`,
+    prazo: '2026-11-13',
+    criadaEm: i + 1,
+  }));
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Casa' }],
+    tarefas: [
+      ...atrasadas,
+      { id: 'r', listaId: 'l', titulo: 'Reunião', prazo: '2026-11-14', hora: '10:01', criadaEm: 100 },
+    ],
+    avisosDoDia: { manha: false, noite: false, rotina: false, habitos: false },
+  });
+  const lembretes = comLembretes('granted');
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: new Date('2026-11-14T10:00:00-03:00') });
+      await lembretes(contexto);
+    },
+  });
+  const agendado = (titulo) =>
+    pagina.waitForFunction(
+      (nome) => window.sistemaDeLembretes.pendentes.some((x) => x.title === nome),
+      titulo,
+      ESPERA,
+    );
+  const titulos = () => pagina.evaluate(() => window.sistemaDeLembretes.pendentes.map((x) => x.title));
+
+  await agendado('Reunião');
+  assert.deepEqual(await titulos(), ['Reunião']); // as atrasadas já passaram da hora: não agendam
+
+  // Passa das 10:01: a notificação da reunião foi entregue e está na tela do celular.
+  await pagina.clock.fastForward('00:02:00');
+
+  // Qualquer gravação refaz o plano. A reunião continua pendente, então o aviso dela fica:
+  // sumir da tela só quando a tarefa for concluída.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Comprar pão');
+  await botao(pagina, 'Amanhã').click();
+  await botao(pagina, 'Salvar').click();
+  await agendado('Comprar pão');
+  assert.deepEqual((await titulos()).sort(), ['Comprar pão', 'Reunião']);
+
+  // Concluir a reunião cancela o aviso dela.
+  await pagina.getByRole('checkbox', { name: 'Concluir: Reunião' }).click();
+  await pagina.waitForFunction(
+    () => !window.sistemaDeLembretes.pendentes.some((x) => x.title === 'Reunião'),
+    null,
+    ESPERA,
+  );
+  assert.deepEqual(await titulos(), ['Comprar pão']);
+  assert.deepEqual(erros, []);
+});
+
 test('lembretes: com a notificação bloqueada nada é agendado nem pedido; no navegador a seção explica', async (t) => {
   const tarefa = { id: 't', listaId: 'l', titulo: 'Prova', prazo: '2099-01-01', criadaEm: 1 };
   const salvo = JSON.stringify({ versao: 4, listas: [{ id: 'l', nome: 'Faculdade' }], tarefas: [tarefa] });
@@ -1756,7 +1818,9 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
     habitos: [
       { id: 'ler', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
       { id: 'alongar', nome: 'Alongar', cor: 'verde', tipo: 'simnao' },
+      { id: 'meditar', nome: 'Meditar', cor: 'lilas', tipo: 'simnao', arquivado: true },
     ],
+    registros: { meditar: { '2026-11-14': 'pulado' } }, // folga marcada à mão; arquivado, fora das contas
   });
   const lembretes = comLembretes('granted');
   const { pagina, erros } = await abrir(t, {
@@ -1863,9 +1927,28 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
   assert.equal(await horaLocal(soAmanha), '15 08:00');
   await corpoDe('noite', 7, 'Faltam: 1 hábito e 3 itens da rotina.');
 
-  // Tocar de novo no mesmo aviso (ou num dia já marcado) não muda nada.
+  // Tocar de novo no mesmo aviso não muda nada.
   await tocar(deHoje, 'feito');
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.alongar['2026-11-14'], 'feito');
+
+  // O botão "Feito" nunca passa por cima do que já está no dia: a folga marcada antes de a
+  // notificação ser tocada continua folga. Também não marca dia futuro nem hábito que não existe.
+  const feitoEm = (habitoId, dia) => tocar({ extra: { tipo: 'habito', dia, habitoId } }, 'feito');
+  const registros = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).registros;
+  await feitoEm('meditar', '2026-11-14');
+  assert.equal((await registros()).meditar['2026-11-14'], 'pulado');
+  await feitoEm('meditar', '2026-11-15');
+  await feitoEm('nao-existe', '2026-11-14');
+  await feitoEm('meditar', 'amanhã');
+  assert.deepEqual((await registros()).meditar, { '2026-11-14': 'pulado' });
+  // Num dia em branco que já passou, marca: é o aviso de ontem tocado hoje.
+  await feitoEm('meditar', '2026-11-13');
+  await pagina.waitForFunction(
+    (chave) => JSON.parse(localStorage.getItem(chave)).registros.meditar['2026-11-13'] === 'feito',
+    CHAVE,
+    ESPERA,
+  );
+  assert.equal((await registros()).meditar['2026-11-14'], 'pulado');
 
   // Tocar num aviso da rotina leva ao Painel; marcar o item tira o aviso dele.
   await tocar(daRotina[0]);

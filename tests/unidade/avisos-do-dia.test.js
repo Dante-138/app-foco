@@ -328,6 +328,29 @@ test('lembrete dos hábitos: fica com os mais próximos, até o limite', () => {
   assert.equal(plano.filter((x) => x.dia === HOJE).length, 20);
 });
 
+test('sem limite: todos os avisos de rotina e de hábito de hoje e de amanhã, na mesma ordem', () => {
+  const longa = {
+    id: 'l',
+    nome: 'Longa',
+    itens: Array.from({ length: 30 }, (_, i) =>
+      item(`i${i}`, `${String(8 + Math.floor(i / 6)).padStart(2, '0')}:${i % 6}0`),
+    ),
+  };
+  const muitos = Array.from({ length: 20 }, (_, i) =>
+    habito(`h${i}`, { lembrete: `2${Math.floor(i / 10)}:${i % 10}0` }),
+  );
+  const tudo = dados({ rotinaDe: () => longa, habitos: muitos });
+  const ligados = { ...so('rotina'), habitos: true };
+  const cortado = planejarDoDia(tudo, ligados, CEDO);
+  const inteiro = planejarDoDia(tudo, ligados, CEDO, { semLimite: true });
+  assert.equal(cortado.length, MAXIMO_DA_ROTINA + MAXIMO_DE_HABITOS);
+  assert.equal(inteiro.length, 60 + 40);
+  // O plano com limite é um pedaço do plano inteiro: nada muda além do corte.
+  const ids = new Set(inteiro.map((x) => x.id));
+  assert.ok(cortado.every((x) => ids.has(x.id)));
+  assert.deepEqual(planejarDoDia(tudo, ligados, CEDO, {}), cortado);
+});
+
 // ------------------------------------------------------------------ tudo junto
 
 test('o plano inteiro sai em ordem de relógio e sem número repetido', () => {

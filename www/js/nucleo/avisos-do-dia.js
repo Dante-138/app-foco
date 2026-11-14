@@ -176,11 +176,14 @@ const porMomento = (a, b) => a.quando.localeCompare(b.quando);
 //   habitoVale(habito, dia): o hábito pede algo nesse dia?
 // ligados: { manha, noite, rotina, habitos } (estado.avisosDoDia)
 // agora: momento atual, "AAAA-MM-DDTHH:MM" local.
+// semLimite: verdadeiro tira os limites de quantidade da rotina e dos hábitos. É para quem quer
+// saber quais avisos continuam valendo, e não o que agendar.
 // Devolve os avisos que ainda não passaram, do mais próximo para o mais distante:
 //   [{ id, tipo: 'manha' | 'noite' | 'rotina' | 'habito', dia, titulo, corpo, quando,
 //      habitoId: id | null, comFeito: o aviso leva o botão "Feito" }]
-export function planejarDoDia(dados, ligados, agora) {
+export function planejarDoDia(dados, ligados, agora, { semLimite = false } = {}) {
   const hoje = agora.slice(0, 10);
+  const ate = (limite) => (semLimite ? Infinity : limite);
   const semana = Array.from({ length: DIAS_DE_RESUMO }, (_, i) => somaDias(hoje, i));
   const doisDias = semana.slice(0, 2);
   const futuros = (lista) => lista.filter((x) => x && x.quando > agora).sort(porMomento);
@@ -189,12 +192,12 @@ export function planejarDoDia(dados, ligados, agora) {
     ...(ligados.manha ? futuros(semana.map((dia) => resumoDaManha(dados, dia))) : []),
     ...(ligados.noite ? futuros(semana.map((dia) => revisaoDaNoite(dados, dia, hoje))) : []),
     ...(ligados.rotina
-      ? futuros(doisDias.flatMap((dia) => avisosDaRotina(dados, dia, hoje))).slice(0, MAXIMO_DA_ROTINA)
+      ? futuros(doisDias.flatMap((dia) => avisosDaRotina(dados, dia, hoje))).slice(0, ate(MAXIMO_DA_ROTINA))
       : []),
     ...(ligados.habitos
       ? futuros(doisDias.flatMap((dia) => avisosDosHabitos(dados, dia, hoje, ligados.rotina))).slice(
           0,
-          MAXIMO_DE_HABITOS,
+          ate(MAXIMO_DE_HABITOS),
         )
       : []),
   ].sort(porMomento);

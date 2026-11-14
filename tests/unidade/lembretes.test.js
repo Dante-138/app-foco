@@ -118,6 +118,27 @@ test('o plano fica com os lembretes mais próximos, até o máximo', () => {
   assert.equal(plano.length, MAXIMO_DE_LEMBRETES);
   assert.equal(plano[0].tarefaId, 't0');
   assert.equal(plano.at(-1).tarefaId, `t${MAXIMO_DE_LEMBRETES - 1}`);
+
+  // Com outro máximo, vale o que foi pedido; Infinity devolve todos, na mesma ordem.
+  assert.equal(planejar(muitas, LISTAS, AGORA, 3).length, 3);
+  const todos = planejar([...muitas].reverse(), LISTAS, AGORA, Infinity);
+  assert.equal(todos.length, MAXIMO_DE_LEMBRETES + 5);
+  assert.deepEqual(todos.slice(0, MAXIMO_DE_LEMBRETES), plano);
+});
+
+test('sem limite e sem olhar o relógio: todo lembrete de tarefa pendente com prazo, até os que já passaram', () => {
+  // É como o app pergunta "quais avisos continuam valendo": 60 atrasadas não tiram a de hoje.
+  const atrasadas = Array.from({ length: MAXIMO_DE_LEMBRETES }, (_, i) =>
+    tarefa(`velha${i}`, { prazo: '2026-11-01' }),
+  );
+  const hoje = tarefa('hoje', { prazo: '2026-11-12', hora: '09:00' });
+  assert.equal(
+    planejar([...atrasadas, hoje], LISTAS, '').some((l) => l.tarefaId === 'hoje'),
+    false,
+  );
+  const vivos = planejar([...atrasadas, hoje], LISTAS, '', Infinity);
+  assert.equal(vivos.length, MAXIMO_DE_LEMBRETES + 1);
+  assert.equal(vivos.at(-1).tarefaId, 'hoje');
 });
 
 test('duas tarefas com o mesmo número de notificação: fica só o lembrete mais próximo', () => {
