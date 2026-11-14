@@ -15,8 +15,9 @@ import { agendarSincronia } from './lembretes.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
-// Ordem da barra de abas e do deslize. O app abre na última aba usada.
-const ABAS = [painel, rotinas, habitos, tarefas];
+// Ordem da barra de abas e do deslize. O app abre na última aba usada; na primeira vez, em
+// Rotinas (a aba padrão do estado inicial, em nucleo/estado.js), esteja ela onde estiver na barra.
+const ABAS = [painel, habitos, rotinas, tarefas];
 
 const titulo = document.getElementById('titulo');
 const conteudo = document.getElementById('conteudo');
