@@ -2157,3 +2157,20 @@ test('política de segurança: HTML em texto e conexão de rede são bloqueados'
     erros.join(' | '),
   );
 });
+
+test('fonte: a Inter vem do próprio app e carrega com a política de segurança', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const fonte = await pagina.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      carregou: document.fonts.check('17px Inter'),
+      corpo: getComputedStyle(document.body).fontFamily,
+    };
+  });
+
+  assert.equal(fonte.carregou, true);
+  assert.match(fonte.corpo, /^"?Inter"?,/);
+  assert.deepEqual(erros, []);
+});

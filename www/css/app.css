@@ -88,6 +88,19 @@
   --cor-neutro: #1f1f24;
 }
 
+/* Inter, empacotada no app (licença OFL em fonts/OFL.txt): a política de segurança não deixa
+   buscar fonte na rede. Um arquivo variável cobre todos os pesos; só o alfabeto latino. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/inter-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 *,
 *::before,
 *::after {
@@ -119,10 +132,12 @@ body {
   margin: 0 auto;
   background: var(--fundo);
   color: var(--texto);
+  /* Escala de texto do iPhone: título grande 34/41, Title2 22/28, Headline e corpo 17/22,
+     Subhead 15/20, Footnote 13/18, Caption 12/16. */
   font:
-    400 15px/1.35 system-ui,
+    400 17px/22px 'Inter',
+    system-ui,
     'Roboto',
-    'Segoe UI',
     sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
@@ -183,9 +198,10 @@ ul {
 }
 
 .topo h1 {
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 #conteudo {
@@ -247,6 +263,7 @@ ul {
   justify-content: center;
   gap: 4px;
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -327,7 +344,8 @@ ul {
   border: 1px solid var(--linha);
   border-radius: 999px;
   color: var(--texto-2);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   white-space: nowrap;
   /* Segurar o nome de uma lista abre o menu dela: não seleciona o texto nem chama o menu do sistema. */
@@ -360,13 +378,16 @@ ul {
 
 .cabecalho h2 {
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .sub {
   margin-top: 2px;
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
@@ -405,8 +426,10 @@ ul {
 
 .sem-conteudo-titulo {
   margin-bottom: 6px;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--texto);
 }
 
@@ -422,7 +445,8 @@ ul {
   background: #2e2e33; /* aviso escuro nos dois temas */
   color: #ededed;
   box-shadow: 0 4px 14px var(--sombra);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 /* Aviso com botão: o "Desfazer" depois de uma exclusão. */
@@ -560,7 +584,8 @@ ul {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .ligacao > span {
@@ -651,7 +676,8 @@ ul {
   gap: 8px;
   min-height: 40px;
   padding: 0 6px;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   color: var(--texto-2);
 }
 
@@ -782,6 +808,7 @@ li.mudando-de-area.saindo {
 
 .dia b {
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dia.hoje {
@@ -800,7 +827,8 @@ li.mudando-de-area.saindo {
   min-height: 44px;
   padding: 4px 8px 4px 0;
   text-align: left;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--cor);
 }
@@ -825,6 +853,7 @@ li.mudando-de-area.saindo {
   padding: 0 12px 0 4px;
   border-radius: 999px;
   font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -967,6 +996,7 @@ li.mudando-de-area.saindo {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.05;
+  font-variant-numeric: tabular-nums;
 }
 
 .cel.num small {
@@ -986,8 +1016,10 @@ li.mudando-de-area.saindo {
 
 .grupo-titulo {
   padding: 12px 16px 4px;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .grupo.atrasado .grupo-titulo {
@@ -1047,7 +1079,9 @@ li.mudando-de-area.saindo {
 
 .tarefa-sub {
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -1126,7 +1160,8 @@ li.mudando-de-area.saindo {
 .painel-data {
   padding: 2px 16px 12px;
   color: var(--texto-2);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .painel-data::first-letter {
@@ -1158,6 +1193,8 @@ li.mudando-de-area.saindo {
   font-size: 26px;
   line-height: 1;
   color: var(--texto);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .painel-rotina {
@@ -1165,12 +1202,16 @@ li.mudando-de-area.saindo {
   gap: 4px;
   min-width: 0;
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .painel-rotina small {
   font-size: 13px;
+  line-height: 18px;
+  letter-spacing: 0;
   font-weight: 400;
   color: var(--texto-2);
 }
@@ -1199,12 +1240,16 @@ li.mudando-de-area.saindo {
   background: var(--sup-1);
   text-align: left;
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
 .painel-contador b {
   font-size: 22px;
+  line-height: 28px;
   color: var(--texto);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 /* ---------------------------------------------------------------- folhas */
@@ -1264,7 +1309,9 @@ dialog.folha[open] {
 
 .folha-titulo {
   font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -1277,6 +1324,7 @@ dialog.folha[open] {
   display: grid;
   gap: 6px;
   font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   color: var(--texto-2);
 }
@@ -1289,7 +1337,6 @@ dialog.folha[open] {
   background: var(--campo);
   color: var(--texto);
   font: inherit;
-  font-size: 16px;
 }
 
 .entrada:focus {
@@ -1310,6 +1357,7 @@ textarea.editor {
 
 .dica {
   font-size: 13px;
+  line-height: 18px;
   color: var(--texto-2);
 }
 
@@ -1392,7 +1440,6 @@ textarea.editor {
   min-height: 48px;
   padding: 0 4px;
   text-align: left;
-  font-size: 16px;
 }
 
 /* Marca da opção ligada ou escolhida. */
@@ -1435,6 +1482,8 @@ textarea.editor {
 .segmento {
   min-height: 40px;
   border-radius: 9px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
   color: var(--texto-2);
 }
