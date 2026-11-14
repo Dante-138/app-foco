@@ -659,6 +659,13 @@ function render(raiz) {
   if (vaiSumir) esperaSumir = setTimeout(redesenhar, SUMIR_MS);
 }
 
+// O Painel marca o hábito de hoje pelo mesmo caminho da grade: sim ou não vira feito na
+// hora; o numérico abre a folha da quantidade.
+export function marcarHabitoHoje(habito) {
+  if (habito.tipo === 'numero') pedirValor(habito, hoje());
+  else gravar(habito, hoje(), 'feito');
+}
+
 export const habitos = {
   id: 'habitos',
   titulo: 'Hábitos',

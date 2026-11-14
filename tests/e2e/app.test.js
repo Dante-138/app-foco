@@ -1599,6 +1599,92 @@ test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e 
   assert.deepEqual(erros, []);
 });
 
+test('painel: o item do horário atual, quanto falta para o próximo e as sequências em risco', async (t) => {
+  // O relógio começa na sexta, 13/11/2026, às 07:10.
+  const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
+  const seguidos = (n, valor) =>
+    Object.fromEntries(
+      Array.from({ length: n }, (_, i) => [`2026-11-${String(12 - i).padStart(2, '0')}`, valor]),
+    );
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'painel',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('i1', 'Levantar', '06:30'),
+          item('i2', 'Arrumar a cama'),
+          item('i3', 'Café', '07:00'),
+          item('i4', 'Mochila'),
+          item('i5', 'Chave'),
+          item('i6', 'Ônibus'),
+          item('i7', 'Bater o ponto', '09:00'),
+        ],
+      },
+    ],
+    marcasRotina: { data: '2026-11-13', porRotina: { r: ['i2'] } },
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'numero', unidade: 'copos', meta: 8 },
+      { id: 'h3', nome: 'Alongar', cor: 'azul', tipo: 'simnao' },
+      { id: 'h4', nome: 'Já feito', cor: 'azul', tipo: 'simnao' },
+    ],
+    registros: {
+      h1: seguidos(5, 'feito'),
+      h2: seguidos(3, 8),
+      h3: { '2026-11-12': 'feito' }, // um dia só não é sequência
+      h4: { ...seguidos(9, 'feito'), '2026-11-13': 'feito' },
+    },
+  });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: (contexto) => contexto.clock.install({ time: new Date('2026-11-13T07:10:00-03:00') }),
+  });
+  const linhas = () => pagina.locator('.painel-bloco .rotina-item').allTextContents();
+  const emRisco = () =>
+    pagina.locator('.painel-bloco', { hasText: 'Sequências em risco' }).locator('.tarefa').allTextContents();
+
+  // 07:10: o item das 07:00 é o de agora; o das 06:30 ficou para trás; o das 09:00 aparece com a contagem.
+  await visivel(pagina.getByText('1 de 7 · 1 atrasado'));
+  assert.deepEqual(await linhas(), ['07:00Caféagora', 'Mochila', 'Chave', '09:00Bater o pontoem 1 h 50']);
+
+  // Marcar o item de agora: a lista segue dali, sem a etiqueta.
+  await pagina.getByRole('checkbox', { name: /Café/ }).click();
+  await visivel(pagina.getByText('2 de 7 · 1 atrasado'));
+  assert.deepEqual(await linhas(), ['Mochila', 'Chave', 'Ônibus', '09:00Bater o pontoem 1 h 50']);
+
+  // O relógio anda com o Painel aberto: às 09:00 o item do ponto vira o de agora.
+  await pagina.clock.fastForward('01:50:00');
+  await visivel(pagina.locator('.painel-bloco .rotina-item', { hasText: 'Bater o pontoagora' }));
+  assert.deepEqual(await linhas(), ['09:00Bater o pontoagora', '06:30Levantar', 'Mochila']);
+  await visivel(pagina.getByText('2 de 7 · 1 atrasado')); // só item com horário conta como atrasado
+
+  // Sequências em risco: da mais longa para a mais curta; feito hoje e sequência de um dia ficam fora.
+  assert.deepEqual(await emRisco(), ['Leitura5 dias seguidos', 'Água3 dias seguidos']);
+
+  // Marcar ali mesmo: sim ou não vira feito na hora; o numérico abre a quantidade.
+  await pagina.getByRole('checkbox', { name: 'Marcar hoje: Leitura' }).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.painel-bloco .tarefa').length === 1,
+    null,
+    ESPERA,
+  );
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h1['2026-11-13'], 'feito');
+  await pagina.getByRole('checkbox', { name: 'Marcar hoje: Água' }).click();
+  await pagina.getByLabel(/Quantidade/).fill('8');
+  await botao(pagina, 'Salvar').click();
+  await pagina.waitForFunction(
+    () =>
+      ![...document.querySelectorAll('.grupo-titulo')].some((x) => x.textContent === 'Sequências em risco'),
+    null,
+    ESPERA,
+  );
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h2['2026-11-13'], 8);
+  assert.deepEqual(erros, []);
+});
+
 // ----------------------------------------------------------------- lembretes
 
 test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {

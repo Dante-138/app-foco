@@ -165,18 +165,21 @@ function iniciar() {
 
   // Virou o dia com o app aberto: as colunas de hábitos, as marcas das rotinas
   // e os grupos de prazo dependem da data, então redesenha.
+  // O Painel mostra o item do horário atual e quanto falta para o próximo: com ele na tela
+  // e nenhuma folha aberta, o desenho acompanha o relógio, de minuto em minuto.
   let diaVisto = hoje();
-  const conferirDia = () => {
-    if (hoje() === diaVisto) return;
+  const conferirRelogio = () => {
+    const virouODia = hoje() !== diaVisto;
     diaVisto = hoje();
-    desenhar({ manterRolagem: true });
+    const painelNaTela = abaAtual().id === 'painel' && !document.querySelector('dialog[open]');
+    if (virouODia || painelNaTela) desenhar({ manterRolagem: true });
   };
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    conferirDia();
+    conferirRelogio();
     agendarSincronia(); // lembrete que já passou sai do plano
   });
-  setInterval(conferirDia, 60_000);
+  setInterval(conferirRelogio, 60_000);
 
   // A grade de hábitos calcula quantos dias cabem na largura.
   let larguraVista = window.innerWidth;

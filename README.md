@@ -21,7 +21,10 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
-  tarefas de hoje. Marca item e conclui tarefa ali mesmo.
+  tarefas de hoje. Marca item e conclui tarefa ali mesmo. Em rotina com horários, a lista começa
+  no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em
+  risco (hábitos que vêm de dois dias seguidos ou mais e ainda estão em branco hoje) aparecem
+  num bloco próprio, e dá para marcar ali.
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
   Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
