@@ -171,6 +171,108 @@ ul {
   fill: currentColor;
 }
 
+/* ----------------------------------------------------------------- toque */
+
+/* Estado pressionado, como no iPhone: o que é tocável encolhe um pouco ao encostar o dedo
+   (90 ms) e volta com mola ao soltar. Linhas e cartões encolhem pouco; botões pequenos,
+   mais. Só transform: não mexe no layout nem segura o toque. */
+:root {
+  --aperto-entra: 90ms;
+  --aperto-solta: 300ms;
+  --mola-solta: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:where(
+  .rotina-item,
+  .tarefa-corpo,
+  .painel-contador,
+  .menu-item,
+  .concluidas-topo,
+  .habito-nome,
+  .botao,
+  .botao-icone,
+  .chip,
+  .fab,
+  .aba .pilula,
+  .segmento,
+  .amostra,
+  .filtro,
+  .cel,
+  .tarefa-check,
+  .tarefa-estrela,
+  .aviso-acao,
+  .edicao-adicionar,
+  .secao-caixa
+) {
+  transition: transform var(--aperto-solta) var(--mola-solta);
+}
+
+:where(button, [role='button'], .cel) {
+  touch-action: manipulation; /* sem espera de toque duplo; a rolagem continua com o pai */
+}
+
+.rotina-item:active,
+.tarefa-corpo:active,
+.painel-contador:active,
+.menu-item:active,
+.concluidas-topo:active,
+.habito-nome:active {
+  transform: scale(0.97);
+  transition-duration: var(--aperto-entra);
+  transition-timing-function: ease-out;
+}
+
+.botao:active,
+.botao-icone:active,
+.chip:active,
+.fab:active,
+.aba:active .pilula,
+.segmento:active,
+.amostra:active,
+.filtro:active,
+.cel:active,
+.tarefa-check:active,
+.tarefa-estrela:active,
+.aviso-acao:active,
+.edicao-adicionar:active,
+.secao-caixa:active {
+  transform: scale(0.92);
+  transition-duration: var(--aperto-entra);
+  transition-timing-function: ease-out;
+}
+
+/* Área de toque de pelo menos 44 px nos botões que desenham menos que isso: uma camada
+   invisível cresce em volta do botão até 44 px, sem mudar o desenho nem o layout. */
+.chip,
+.filtro,
+.amostra,
+.segmento,
+.secao-caixa,
+.aviso-acao,
+.edicao-adicionar,
+.botao-icone.pequeno {
+  position: relative;
+}
+
+.chip::after,
+.filtro::after,
+.amostra::after,
+.segmento::after,
+.secao-caixa::after,
+.aviso-acao::after,
+.edicao-adicionar::after,
+.botao-icone.pequeno::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - 44px) / 2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --aperto-solta: 0ms;
+  }
+}
+
 /* ------------------------------------------------------------- estrutura */
 
 .topo {
