@@ -168,7 +168,7 @@ jobs:
         if: steps.chave.outputs.existe == 'true'
         run: |
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          esperada="$(tr -d ':[:space:]' < android/assinatura-sha256.txt | tr 'A-F' 'a-f')"
+          esperada="$(sed '/^#/d' android/assinatura-sha256.txt | tr -d ':[:space:]' | tr 'A-F' 'a-f')"
           if ! printf '%s' "$esperada" | grep -Eq '^[0-9a-f]{64}$'; then
             echo "::error::android/assinatura-sha256.txt não tem uma impressão digital SHA-256 válida (64 caracteres hexadecimais)."
             exit 1
