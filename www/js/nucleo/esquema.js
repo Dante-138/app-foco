@@ -24,7 +24,8 @@
 //   tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
 //                    hora: 'HH:MM' | null (só existe com prazo),
 //                    repeticao: { cada, unidade } | null (só existe com prazo; ver repeticao.js),
-//                    estrela, feita, criadaEm, feitaEm: número | null }]
+//                    estrela, feita, criadaEm, feitaEm: número | null,
+//                    subtarefas: [{ id, titulo, feita }] (os passos da tarefa; padrão: nenhum) }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
 //   lembretes:    verdadeiro agenda notificação para as tarefas com prazo (padrão: verdadeiro)
 // }
@@ -38,6 +39,7 @@ import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { TODOS_OS_DIAS } from './habito-calculo.js';
 import { repeticaoValida } from './repeticao.js';
+import { LIMITE_DE_SUBTAREFAS } from './subtarefas.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
 export const LIMITES = Object.freeze({
@@ -177,6 +179,19 @@ function sanearListas(valor, gerarId, avisos) {
   return listas.length ? listas : [{ id: gerarId(), nome: NOME_LISTA_PADRAO }];
 }
 
+// Subtarefas: id único dentro da tarefa e título com texto. Linha em branco sai sem aviso,
+// como o item em branco de uma rotina.
+function sanearSubtarefas(valor, avisos) {
+  return comIdUnico(valor, 'subtarefas', avisos)
+    .map((sub) => ({
+      id: sub.id,
+      titulo: cortar(sub.titulo, LIMITES.tituloTarefa),
+      feita: sub.feita === true,
+    }))
+    .filter((sub) => sub.titulo)
+    .slice(0, LIMITE_DE_SUBTAREFAS);
+}
+
 function sanearTarefas(valor, listas, avisos) {
   const idsDeLista = new Set(listas.map((l) => l.id));
   return comIdUnico(valor, 'tarefas', avisos).map((tarefa) => {
@@ -199,6 +214,7 @@ function sanearTarefas(valor, listas, avisos) {
       feita,
       criadaEm,
       feitaEm: feita ? (numeroValido(tarefa.feitaEm) ? tarefa.feitaEm : criadaEm) : null,
+      subtarefas: sanearSubtarefas(tarefa.subtarefas, avisos),
     };
   });
 }

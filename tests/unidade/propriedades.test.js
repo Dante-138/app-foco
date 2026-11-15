@@ -14,6 +14,7 @@ import { MOTIVO, gerarBackup, lerBackup } from '../../www/js/nucleo/backup.js';
 import { UNIDADES } from '../../www/js/nucleo/repeticao.js';
 import { pontuacao, sequencias } from '../../www/js/nucleo/habito-calculo.js';
 import { somaDias } from '../../www/js/nucleo/datas.js';
+import { paraProximaOcorrencia } from '../../www/js/nucleo/subtarefas.js';
 
 const DIA = '2026-11-14';
 const OPCOES = { seed: 20261114, numRuns: 500 };
@@ -102,6 +103,9 @@ const tarefa = registro({
   feita: logico,
   criadaEm: talvez(fc.integer()),
   feitaEm: talvez(fc.option(fc.integer())),
+  subtarefas: talvez(
+    fc.array(registro({ id: talvez(id), titulo: talvez(curto), feita: logico }), { maxLength: 4 }),
+  ),
 });
 const estadoRuim = registro({
   versao: talvez(fc.integer({ min: -1, max: VERSAO + 2 })),
@@ -293,6 +297,37 @@ test('propriedade: hábito com os sete dias conta igual a hábito sem a lista de
   );
 });
 
+// ------------------------------------------------------------------ subtarefas
+
+test('propriedade: a próxima ocorrência leva as subtarefas por fazer, com ids novos, e continua válida', () => {
+  fc.assert(
+    fc.property(estadoValido, (estado) => {
+      let n = 0;
+      const gerarId = () => {
+        n += 1;
+        return `sub${n}`;
+      };
+      for (const tarefaValida of estado.tarefas) {
+        const antes = structuredClone(tarefaValida.subtarefas);
+        const novas = paraProximaOcorrencia(tarefaValida.subtarefas, gerarId);
+        assert.deepEqual(
+          novas.map((s) => s.titulo),
+          antes.map((s) => s.titulo),
+        );
+        assert.ok(novas.every((s) => s.feita === false));
+        assert.equal(new Set(novas.map((s) => s.id)).size, novas.length);
+        assert.deepEqual(tarefaValida.subtarefas, antes); // as da tarefa concluída não mudam
+        tarefaValida.subtarefas = novas;
+      }
+      // O estado com as subtarefas trocadas passa pela validação sem correção.
+      const lido = lerEstado(JSON.stringify(estado), contexto());
+      assert.deepEqual(lido.estado, estado);
+      assert.deepEqual(lido.avisos, []);
+    }),
+    OPCOES,
+  );
+});
+
 // --------------------------------------------------------- o próprio gerador
 
 test('o gerador de estados válidos produz estados com conteúdo, não só estados vazios', () => {
@@ -312,6 +347,7 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
     tarefas: parte((e) => e.tarefas.length > 0),
     'tarefas com prazo': parte((e) => e.tarefas.some((x) => x.prazo)),
     'tarefas que repetem': parte((e) => e.tarefas.some((x) => x.repeticao)),
+    'tarefas com subtarefas': parte((e) => e.tarefas.some((x) => x.subtarefas.length > 0)),
     'registros de hábito': parte(diasRegistrados),
     'notas de hábito': parte((e) => Object.keys(e.notasHabito).length > 0),
     'marcas do dia nas rotinas': parte(marcasDoDia),

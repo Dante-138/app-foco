@@ -8,6 +8,8 @@ import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esqu
 import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
+import { paraProximaOcorrencia, textoDoProgresso } from './nucleo/subtarefas.js';
+import { campoDeSubtarefas } from './subtarefas.js';
 import {
   h,
   icone,
@@ -40,6 +42,8 @@ function criarProximaOcorrencia(tarefa) {
     feita: false,
     feitaEm: null,
     criadaEm: Date.now(),
+    // As subtarefas vão junto, todas por fazer; as da concluída ficam como estavam.
+    subtarefas: paraProximaOcorrencia(tarefa.subtarefas, uid),
   });
   tarefa.repeticao = null;
 }
@@ -154,6 +158,7 @@ function editarTarefa(tarefa) {
     placeholder: 'Detalhes (opcional)',
     maxLength: LIMITES.notasTarefa,
   });
+  const subtarefas = campoDeSubtarefas(tarefa);
   const prazo = h('input', { class: 'entrada', type: 'date', value: tarefa?.prazo ?? '' });
   const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
 
@@ -202,6 +207,7 @@ function editarTarefa(tarefa) {
       repeticao,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
+      subtarefas: subtarefas.ler(),
     };
     if (tarefa) {
       Object.assign(tarefa, dados);
@@ -237,6 +243,7 @@ function editarTarefa(tarefa) {
       { class: 'folha-form', onsubmit: aoSalvar },
       campo('Título', titulo),
       campo('Detalhes', notas),
+      subtarefas.elemento,
       h('div', { class: 'dupla' }, campo('Prazo', prazo), campo('Horário', hora)),
       h(
         'div',
@@ -395,6 +402,12 @@ function menuLista(lista) {
 
 // --------------------------------------------------------------- desenho
 
+// "2 de 5 subtarefas" na linha da tarefa; nada quando ela não tem subtarefas.
+function linhaDasSubtarefas(tarefa) {
+  const texto = textoDoProgresso(tarefa.subtarefas);
+  return texto ? [h('span', { class: 'tarefa-sub' }, texto)] : [];
+}
+
 // comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
 function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
   const detalhes = [];
@@ -408,6 +421,7 @@ function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = fals
     .filter(Boolean)
     .join(', ');
   if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
+  detalhes.push(...linhaDasSubtarefas(tarefa));
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
     if (nomeLista) detalhes.push(h('span', { class: 'tarefa-sub' }, nomeLista));
