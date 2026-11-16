@@ -43,6 +43,11 @@ jobs:
           BASE: origin/${{ github.base_ref }}
         run: node tools/verificar-commits.mjs "$BASE"
 
+      # test.only, .skip, "c8 ignore", "Stryker disable", eslint-disable e afins: desligam um
+      # portão sem mudar a configuração dele.
+      - name: Rotas de fuga
+        run: npm run escapes
+
       - name: Lint (zero avisos)
         run: npm run lint
 
@@ -89,3 +94,28 @@ jobs:
       - name: Compilar o APK de depuração
         working-directory: android
         run: sh ./gradlew --no-daemon --console=plain assembleDebug
+
+      # APK de PR: o mesmo código, como um app à parte ("Foco PR", sufixo .pr) e com dados de
+      # demonstração, para testar a mudança no celular sem tocar nos dados de verdade. Assinado
+      # com a chave de depuração do runner, que muda a cada rodada: para instalar um por cima do
+      # outro, desinstale antes (adb uninstall io.github.dante138.foco.pr).
+      - name: Pôr os dados de demonstração na cópia do app
+        if: github.event_name == 'pull_request'
+        run: node tools/dados-de-demonstracao.mjs
+
+      - name: Compilar o APK de PR
+        if: github.event_name == 'pull_request'
+        working-directory: android
+        env:
+          NUMERO_DO_PR: ${{ github.event.pull_request.number }}
+        run: |
+          sh ./gradlew --no-daemon --console=plain assembleDebug -Pfoco.variante=pr
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/foco-pr-$NUMERO_DO_PR.apk"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'pull_request'
+        with:
+          name: foco-pr-${{ github.event.pull_request.number }}
+          path: foco-pr-${{ github.event.pull_request.number }}.apk
+          if-no-files-found: error
+          retention-days: 7

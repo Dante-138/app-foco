@@ -3,18 +3,21 @@
 
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
-import { hoje, somaDias } from './nucleo/datas.js';
+import { diasEntre, hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
-import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
+import { agrupar, ordenar, quantoFalta, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
+import { devolver, retirar } from './nucleo/desfazer.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
 import { paraProximaOcorrencia, textoDoProgresso } from './nucleo/subtarefas.js';
 import { campoDeSubtarefas } from './subtarefas.js';
+import { campoDeAvisos, novaConta } from './conta.js';
 import {
   h,
   icone,
   abrirFolha,
   abrirMenu,
+  avisarComDesfazer,
   aoSegurar,
   confirmar,
   campo,
@@ -35,11 +38,14 @@ let esperaRedesenho = null;
 
 // Tarefa que se repete: ao concluir, nasce a próxima ocorrência, e a série segue nela.
 // A concluída fica no histórico sem a repetição, para reabrir não criar outra série.
+// Devolve o id da próxima, para o Desfazer poder tirá-la.
 function criarProximaOcorrencia(tarefa) {
+  const id = uid();
   estado.tarefas.push({
     ...tarefa,
-    id: uid(),
+    id,
     prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
+    avisos: [...tarefa.avisos],
     feita: false,
     feitaEm: null,
     criadaEm: Date.now(),
@@ -47,24 +53,43 @@ function criarProximaOcorrencia(tarefa) {
     subtarefas: paraProximaOcorrencia(tarefa.subtarefas, uid),
   });
   tarefa.repeticao = null;
+  return id;
+}
+
+// Conclui e oferece o Desfazer: reabre a tarefa, devolve a repetição e tira a próxima
+// ocorrência que a conclusão criou.
+function marcarConcluida(tarefa) {
+  const repeticao = tarefa.repeticao;
+  tarefa.feita = true;
+  tarefa.feitaEm = Date.now();
+  const proxima = repeticao ? criarProximaOcorrencia(tarefa) : null;
+  salvar();
+  avisarComDesfazer('Tarefa concluída', () => {
+    tarefa.feita = false;
+    tarefa.feitaEm = null;
+    tarefa.repeticao = repeticao;
+    if (proxima) estado.tarefas = estado.tarefas.filter((t) => t.id !== proxima);
+    salvar();
+    redesenhar();
+  });
 }
 
 // Concluir sem a animação da lista: usado pelo painel. Tarefa que se repete gera a próxima.
 export function concluirTarefa(tarefa) {
   if (tarefa.feita) return;
-  tarefa.feita = true;
-  tarefa.feitaEm = Date.now();
-  if (tarefa.repeticao) criarProximaOcorrencia(tarefa);
+  marcarConcluida(tarefa);
   vibrar('concluido');
-  salvar();
   redesenhar();
 }
 
 function alternarFeita(tarefa, check) {
-  tarefa.feita = !tarefa.feita;
-  tarefa.feitaEm = tarefa.feita ? Date.now() : null;
-  if (tarefa.feita && tarefa.repeticao) criarProximaOcorrencia(tarefa);
-  salvar();
+  if (tarefa.feita) {
+    tarefa.feita = false;
+    tarefa.feitaEm = null;
+    salvar();
+  } else {
+    marcarConcluida(tarefa);
+  }
 
   const linhaNaTela = check.closest('.tarefa');
   if (!tarefa.feita) {
@@ -166,6 +191,7 @@ function editarTarefa(tarefa) {
   const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
 
   const repetir = camposDeRepeticao(tarefa);
+  const avisar = campoDeAvisos(tarefa?.avisos ?? []);
   const lista = h(
     'select',
     { class: 'entrada' },
@@ -182,9 +208,10 @@ function editarTarefa(tarefa) {
         onclick: () => {
           prazo.value = valor;
           if (!valor) {
-            // sem data não há horário nem repetição
+            // sem data não há horário, repetição nem aviso antecipado
             hora.value = '';
             repetir.limpar();
+            avisar.limpar();
           }
         },
       },
@@ -201,13 +228,15 @@ function editarTarefa(tarefa) {
     }
 
     const repeticao = repetir.ler();
+    const avisos = avisar.ler();
     const dados = {
       titulo: tituloFinal,
       notas: notas.value.trim(),
-      // Horário ou repetição sem data valem a partir de hoje, como no Google Tasks.
-      prazo: prazo.value || (hora.value || repeticao ? hoje() : null),
+      // Horário, repetição ou aviso sem data valem a partir de hoje, como no Google Tasks.
+      prazo: prazo.value || (hora.value || repeticao || avisos.length ? hoje() : null),
       hora: hora.value || null,
       repeticao,
+      avisos,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
       subtarefas: subtarefas.ler(),
@@ -233,10 +262,16 @@ function editarTarefa(tarefa) {
 
   const excluir = async () => {
     if (!(await confirmar(`Excluir a tarefa "${tarefa.titulo}"?`))) return;
-    estado.tarefas = estado.tarefas.filter((t) => t.id !== tarefa.id);
+    const { restantes, removidos } = retirar(estado.tarefas, (t) => t.id === tarefa.id);
+    estado.tarefas = restantes;
     salvar();
     fechar();
     redesenhar();
+    avisarComDesfazer('Tarefa excluída', () => {
+      estado.tarefas = devolver(estado.tarefas, removidos);
+      salvar();
+      redesenhar();
+    });
   };
 
   // Folha no jeito do iPhone: Cancelar e Salvar na barra do topo, título grande e detalhes
@@ -253,6 +288,21 @@ function editarTarefa(tarefa) {
       atalho('Hoje', hoje()),
       atalho('Amanhã', somaDias(hoje(), 1)),
       atalho('Sem data', ''),
+      // Só ao criar: troca esta folha pela da conta mensal, levando o título já digitado.
+      tarefa
+        ? null
+        : h(
+            'button',
+            {
+              type: 'button',
+              class: 'chip fantasma',
+              onclick: () => {
+                fechar();
+                novaConta(lista.value || listaPadrao, titulo.value.trim());
+              },
+            },
+            'Conta mensal',
+          ),
     ),
     h(
       'div',
@@ -261,6 +311,7 @@ function editarTarefa(tarefa) {
       repetir.campoCada,
       estado.listas.length > 1 ? linhaCampo('Lista', lista) : null,
     ),
+    avisar.elemento,
     tarefa
       ? h(
           'div',
@@ -350,11 +401,21 @@ async function excluirLista(lista) {
     quantas === 0 ? '' : quantas === 1 ? ' e a tarefa dela' : ` e as ${quantas} tarefas dela`;
   if (!(await confirmar(`Excluir a lista "${lista.nome}"${complemento}?`))) return;
 
-  estado.listas = estado.listas.filter((l) => l.id !== lista.id);
-  estado.tarefas = estado.tarefas.filter((t) => t.listaId !== lista.id);
+  const listas = retirar(estado.listas, (l) => l.id === lista.id);
+  const tarefasDaLista = retirar(estado.tarefas, (t) => t.listaId === lista.id);
+  const ativa = estado.listaAtiva;
+  estado.listas = listas.restantes;
+  estado.tarefas = tarefasDaLista.restantes;
   estado.listaAtiva = estado.listas[0].id;
   salvar();
   redesenhar();
+  avisarComDesfazer('Lista excluída', () => {
+    estado.listas = devolver(estado.listas, listas.removidos);
+    estado.tarefas = devolver(estado.tarefas, tarefasDaLista.removidos);
+    estado.listaAtiva = ativa;
+    salvar();
+    redesenhar();
+  });
 }
 
 // Ordem das tarefas pendentes. Vale para todas as listas e para a visão "com estrela".
@@ -386,9 +447,15 @@ async function excluirConcluidas(lista) {
   const quais = quantas === 1 ? 'a tarefa concluída' : `as ${quantas} tarefas concluídas`;
   if (!(await confirmar(`Excluir ${quais} da lista "${lista.nome}"?`))) return;
 
-  estado.tarefas = estado.tarefas.filter((t) => !daLista(t));
+  const { restantes, removidos } = retirar(estado.tarefas, daLista);
+  estado.tarefas = restantes;
   salvar();
   redesenhar();
+  avisarComDesfazer(quantas === 1 ? '1 tarefa excluída' : `${quantas} tarefas excluídas`, () => {
+    estado.tarefas = devolver(estado.tarefas, removidos);
+    salvar();
+    redesenhar();
+  });
 }
 
 // A ordem das listas na faixa do topo é a ordem em que estão guardadas.
@@ -406,6 +473,7 @@ function menuLista(lista) {
   const posicao = estado.listas.indexOf(lista);
   abrirMenu(lista.nome, [
     { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
+    { rotulo: 'Nova conta mensal', acao: () => novaConta(lista.id) },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
     { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverLista(lista, -1) },
     {
@@ -436,18 +504,29 @@ function linhaDasSubtarefas(tarefa) {
   return texto ? [h('span', { class: 'tarefa-sub' }, texto)] : [];
 }
 
-// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
-function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
-  const detalhes = [];
-  // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
-  const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
-  const quando = [
-    mostrarData ? rotuloData(tarefa.prazo, hoje()) : null,
+// Data, horário, contagem e repetição em uma linha só: "sex., 20 de nov., 14:30, em 6 dias,
+// repete todo mês". A data só aparece quando o grupo não diz o dia (atrasada, concluída ou
+// ordem que não é por data). A contagem regressiva vale para toda pendente com prazo, menos
+// nos grupos Hoje e Amanhã, em que o título do grupo já diz; na atrasada, é há quanto venceu.
+function textoDoPrazo(tarefa, { atrasada, comPrazo }) {
+  if (!tarefa.prazo) return '';
+  const dia = hoje();
+  const mostrarData = atrasada || tarefa.feita || comPrazo;
+  const mostrarFalta = !tarefa.feita && (atrasada || comPrazo || diasEntre(dia, tarefa.prazo) > 1);
+  return [
+    mostrarData ? rotuloData(tarefa.prazo, dia) : null,
     tarefa.hora,
+    mostrarFalta ? quantoFalta(tarefa.prazo, dia) : null,
     tarefa.repeticao ? `repete ${descrever(tarefa.repeticao)}` : null,
   ]
     .filter(Boolean)
     .join(', ');
+}
+
+// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
+function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
+  const detalhes = [];
+  const quando = textoDoPrazo(tarefa, { atrasada, comPrazo });
   if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
   detalhes.push(...linhaDasSubtarefas(tarefa));
   if (mostrarLista) {

@@ -28,7 +28,7 @@ const ARMAZENAMENTO = ['localStorage', 'sessionStorage', 'indexedDB'].map((name)
 
 export default [
   // android/ é o projeto nativo gerado pelo Capacitor (inclui uma cópia de www/).
-  { ignores: ['node_modules/', 'referencias/', 'dist/', 'android/'] },
+  { ignores: ['node_modules/', 'referencias/', 'dist/', 'android/', '.stryker-tmp/'] },
 
   {
     linterOptions: {
@@ -122,7 +122,7 @@ export default [
 
   // ---------------------------------------- ferramentas, testes e config (Node)
   {
-    files: ['tools/**/*.mjs', 'tests/**/*.js', '*.config.js'],
+    files: ['tools/**/*.mjs', 'tests/**/*.js', '*.config.js', '*.config.mjs'],
     languageOptions: { globals: globals.node },
   },
   // Nos testes de ponta a ponta, as funções passadas a pagina.evaluate() rodam no navegador.

@@ -26,6 +26,8 @@
 //   tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
 //                    hora: 'HH:MM' | null (só existe com prazo),
 //                    repeticao: { cada, unidade } | null (só existe com prazo; ver repeticao.js),
+//                    avisos: [dias antes do prazo em que a tarefa também avisa] (só existe com
+//                    prazo; padrão: nenhum; ver lembretes.js),
 //                    estrela, feita, criadaEm, feitaEm: número | null,
 //                    subtarefas: [{ id, titulo, feita }] (os passos da tarefa; padrão: nenhum) }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
@@ -41,6 +43,7 @@ import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
 import { LIMITE_DE_SUBTAREFAS } from './subtarefas.js';
+import { avisosValidos } from './lembretes.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
 export const LIMITES = Object.freeze({
@@ -210,6 +213,7 @@ function sanearTarefas(valor, listas, avisos) {
         prazo && repeticaoValida(tarefa.repeticao)
           ? { cada: tarefa.repeticao.cada, unidade: tarefa.repeticao.unidade }
           : null,
+      avisos: prazo ? avisosValidos(tarefa.avisos) : [], // aviso antecipado sem data não existe
       estrela: tarefa.estrela === true,
       feita,
       criadaEm,
