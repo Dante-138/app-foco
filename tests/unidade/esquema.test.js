@@ -23,6 +23,7 @@ function valido() {
       {
         id: 'r1',
         nome: 'Home Office',
+        diasDaSemana: [1, 3, 5],
         itens: [
           { id: 'i1', tipo: 'secao', texto: 'MANHÃ', hora: null, habitoId: null },
           { id: 'i2', tipo: 'item', texto: 'Acordar', hora: '06:30', habitoId: null },
@@ -31,6 +32,7 @@ function valido() {
       },
     ],
     rotinaAtiva: 'r1',
+    rotinaDoDiaEm: '2026-11-12',
     marcasRotina: { data: HOJE, porRotina: { r1: ['i2'] } },
     marcadosNoFim: false,
     habitos: [
@@ -117,6 +119,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     aba: 'rotinas',
     rotinas: [],
     rotinaAtiva: null,
+    rotinaDoDiaEm: null,
     marcasRotina: { data: HOJE, porRotina: {} },
     marcadosNoFim: true,
     habitos: [],
@@ -185,7 +188,31 @@ test('nome de rotina é aparado, cortado no limite e nunca fica vazio', () => {
   });
   assert.equal(estado.rotinas[0].nome, 'n'.repeat(LIMITES.nomeRotina));
   assert.equal(estado.rotinas[1].nome, 'Rotina');
-  assert.deepEqual(estado.rotinas[2], { id: 'c', nome: 'Rotina', itens: [] });
+  assert.deepEqual(estado.rotinas[2], { id: 'c', nome: 'Rotina', diasDaSemana: [], itens: [] });
+});
+
+test('dias da semana da rotina: só de 0 a 6, sem repetir e em ordem; o resto vira lista vazia', () => {
+  const { estado, avisos } = limpar({
+    rotinas: [
+      { id: 'a', nome: 'A', diasDaSemana: [5, 1, 1, 9, -1, 2.5, '3', null, 0] },
+      { id: 'b', nome: 'B', diasDaSemana: 'seg' },
+      { id: 'c', nome: 'C', diasDaSemana: { 0: 1 } },
+      { id: 'd', nome: 'D' },
+      { id: 'e', nome: 'E', diasDaSemana: [6, 5, 4, 3, 2, 1, 0] },
+    ],
+  });
+  assert.deepEqual(
+    estado.rotinas.map((r) => r.diasDaSemana),
+    [[0, 1, 5], [], [], [], [0, 1, 2, 3, 4, 5, 6]],
+  );
+  assert.deepEqual(avisos, []);
+});
+
+test('rotinaDoDiaEm: só data real; qualquer outra coisa vira null', () => {
+  assert.equal(limpar({ rotinaDoDiaEm: '2026-11-11' }).estado.rotinaDoDiaEm, '2026-11-11');
+  for (const errado of ['2026-02-30', 'ontem', 20261111, null, undefined, {}]) {
+    assert.equal(limpar({ rotinaDoDiaEm: errado }).estado.rotinaDoDiaEm, null);
+  }
 });
 
 test('item sem texto sai sem aviso; tipo desconhecido vira item; seção não tem hora', () => {
