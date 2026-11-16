@@ -21,11 +21,18 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
-  faixa e excluir.
+  faixa e excluir. Toda pendente com prazo mostra a contagem regressiva ("em 6 dias"); a
+  atrasada fica em vermelho, com a data que tinha e há quanto venceu. "Nova conta mensal" (no
+  menu da lista ou no atalho da tarefa nova) cria a conta já repetindo todo mês, com o valor
+  no título.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
-  às 9h quando só tem a data.
+  às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
+  se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
-  tarefas de hoje. Marca item e conclui tarefa ali mesmo.
+  tarefas de hoje. Marca item e conclui tarefa ali mesmo. Em rotina com horários, a lista começa
+  no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em
+  risco (hábitos que vêm de dois dias seguidos ou mais e ainda estão em branco hoje) aparecem
+  num bloco próprio, e dá para marcar ali.
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
   Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
@@ -53,14 +60,18 @@ Depois acesse `http://localhost:8137` no Chrome do celular.
 
 ## Desenvolvimento
 
+Quem edita o quê, o fluxo de PR e as armadilhas conhecidas estão em [AGENTS.md](AGENTS.md).
+
 Fora o Capacitor, as dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
 o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado na máquina.
 
 ```bash
 npm install         # uma vez
 npm run dev         # servidor local em http://localhost:8137
-npm run check       # o portão inteiro: commits, lint, formatação, testes de unidade e de ponta a ponta
+npm run check       # o portão inteiro: commits, rotas de fuga, lint, formatação, testes de unidade e de ponta a ponta
 npm run commits     # só as mensagens de commit do branch, contra a origin/main
+npm run escapes     # só as rotas de fuga: test.only, .skip, "c8 ignore", "Stryker disable", eslint-disable
+npm run test:mutation  # teste de mutação do núcleo (uns 3 minutos; roda sozinho no CI)
 npm run format      # formata o código com o Prettier
 ```
 
@@ -74,6 +85,12 @@ git config core.hooksPath .githooks
 Vale a pena porque commit enviado com mensagem fora do padrão não tem conserto simples: a
 `main` e os branches enviados não aceitam reescrita de histórico, então o jeito é refazer o
 branch com outro nome.
+
+O mesmo portão reprova nomes e dados que não podem ir para um repositório público, a partir de
+uma lista que nunca fica no repositório: um termo por linha em
+`~/.config/portao-de-qualidade/termos-proibidos.txt` (ou no arquivo de
+`ARQUIVO_TERMOS_PROIBIDOS`), e no CI o secret `TERMOS_PROIBIDOS`. Maiúscula e acento não
+contam, e o aviso diz só o número do termo na lista.
 
 ## APK Android
 
@@ -101,6 +118,23 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
   É o que identifica o app instalado ao relatar um defeito.
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
+
+### APK de PR
+
+Todo pull request ganha um APK para testar no celular antes do merge: o job `Android` anexa
+`foco-pr-N.apk` à rodada do CI (aba Checks do PR, Artifacts; fica 7 dias). É um app à parte,
+"Foco PR" (`io.github.dante138.foco.pr`), que instala ao lado do app de verdade e não toca nos
+dados dele. Abre com dados de demonstração (`tools/dados-de-demonstracao.mjs`): rotinas,
+hábitos com dois meses de histórico e tarefas com prazo, tudo inventado e com datas relativas
+ao dia do build. É o app certo para tirar print de PR.
+
+```bash
+gh run download --repo Dante-138/app-foco --name foco-pr-N
+```
+
+A chave é a de depuração do runner e muda a cada rodada. Para instalar um APK de PR por cima de
+outro, desinstale antes: `adb uninstall io.github.dante138.foco.pr` (só os dados de demonstração
+se perdem).
 
 ## Portão de qualidade
 
@@ -190,5 +224,5 @@ tools/                  servidor de desenvolvimento e portão de commits
 
 ## Próximos passos
 
-O roteiro está nas [issues](https://github.com/Dante-138/foco/issues) e nos
-[milestones](https://github.com/Dante-138/foco/milestones) do repositório.
+O roteiro está nas [issues](https://github.com/Dante-138/app-foco/issues) e nos
+[milestones](https://github.com/Dante-138/app-foco/milestones) do repositório.

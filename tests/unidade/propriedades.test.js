@@ -13,11 +13,14 @@ import { PROBLEMA, lerEstado } from '../../www/js/nucleo/estado.js';
 import { MOTIVO, gerarBackup, lerBackup } from '../../www/js/nucleo/backup.js';
 import { UNIDADES } from '../../www/js/nucleo/repeticao.js';
 import { pontuacao, sequencias } from '../../www/js/nucleo/habito-calculo.js';
-import { somaDias } from '../../www/js/nucleo/datas.js';
+import { deIso, diasEntre, somaDias } from '../../www/js/nucleo/datas.js';
+import { MAXIMO_DE_LEMBRETES, planejar } from '../../www/js/nucleo/lembretes.js';
+import { proximoVencimento } from '../../www/js/nucleo/conta.js';
 import { abrirRotinaDoDia, definirDias, rotinaDoDia } from '../../www/js/nucleo/rotina-do-dia.js';
 
 const DIA = '2026-11-14';
-const OPCOES = { seed: 20261114, numRuns: 500 };
+// O teste de mutação reduz os casos (stryker.config.mjs): ele roda este arquivo uma vez por mutante.
+const OPCOES = { seed: 20261114, numRuns: Number(process.env.FOCO_CASOS_POR_PROPRIEDADE) || 500 };
 const MINIMO_COM_CONTEUDO = 0.1; // parte mínima dos estados gerados que precisa ter cada tipo de dado
 
 function contexto() {
@@ -100,6 +103,7 @@ const tarefa = registro({
       }),
     ),
   ),
+  avisos: talvez(fc.array(fc.integer({ min: -1, max: 33 }), { maxLength: 5 })),
   estrela: logico,
   feita: logico,
   criadaEm: talvez(fc.integer()),
@@ -333,6 +337,44 @@ test('propriedade: abrir a rotina do dia deixa o estado válido e só age uma ve
   );
 });
 
+// ------------------------------------------------------- lembretes e contas
+
+test('propriedade: o plano de lembretes só tem avisos futuros de tarefas pendentes, em ordem e sem número repetido', () => {
+  const momento = fc
+    .tuple(
+      fc.integer({ min: -40, max: 40 }),
+      fc.integer({ min: 0, max: 23 }),
+      fc.integer({ min: 0, max: 59 }),
+    )
+    .map(([d, h, m]) => `${somaDias(DIA, d)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  fc.assert(
+    fc.property(estadoValido, momento, (estado, agora) => {
+      const plano = planejar(estado.tarefas, estado.listas, agora);
+      const pendentes = new Map(estado.tarefas.filter((x) => !x.feita && x.prazo).map((x) => [x.id, x]));
+
+      assert.ok(plano.length <= MAXIMO_DE_LEMBRETES);
+      assert.equal(new Set(plano.map((l) => l.id)).size, plano.length, 'número de notificação repetido');
+      for (const [i, lembrete] of plano.entries()) {
+        assert.ok(Number.isInteger(lembrete.id) && lembrete.id > 0 && lembrete.id <= 2 ** 30);
+        assert.ok(lembrete.quando > agora, `lembrete no passado: ${lembrete.quando}`);
+        assert.ok(i === 0 || plano[i - 1].quando <= lembrete.quando, 'fora de ordem');
+        assert.ok(pendentes.has(lembrete.tarefaId), 'lembrete de tarefa concluída ou sem prazo');
+        assert.equal(lembrete.titulo, pendentes.get(lembrete.tarefaId).titulo);
+      }
+      // Cada tarefa tem no máximo o aviso do prazo, um por dia de antecedência e o de atraso.
+      for (const [idDaTarefa, pendente] of pendentes) {
+        const dela = plano.filter((l) => l.tarefaId === idDaTarefa).length;
+        const maximo = 1 + pendente.avisos.length + (pendente.avisos.length ? 1 : 0);
+        assert.ok(dela <= maximo, `${dela} lembretes para uma tarefa com ${pendente.avisos.length} avisos`);
+      }
+      // Concluir tudo esvazia o plano.
+      const concluidas = estado.tarefas.map((x) => ({ ...x, feita: true }));
+      assert.deepEqual(planejar(concluidas, estado.listas, agora), []);
+    }),
+    OPCOES,
+  );
+});
+
 test('propriedade: definir os dias de uma rotina deixa cada dia da semana com uma rotina só', () => {
   const dias = fc.array(fc.integer({ min: -1, max: 7 }), { maxLength: 9 });
   fc.assert(
@@ -412,6 +454,21 @@ test('propriedade: uma pausa nunca piora a sequência nem a pontuação, e sem p
   );
 });
 
+test('propriedade: o próximo vencimento cai no dia pedido (ou no fim do mês), de hoje a um mês', () => {
+  const diaQualquer = fc.integer({ min: -800, max: 800 }).map((n) => somaDias(DIA, n));
+  fc.assert(
+    fc.property(fc.integer({ min: 1, max: 31 }), diaQualquer, (diaDoMes, hoje) => {
+      const vencimento = proximoVencimento(diaDoMes, hoje);
+      const data = deIso(vencimento);
+      const ultimoDia = new Date(data.getFullYear(), data.getMonth() + 1, 0).getDate();
+      assert.equal(data.getDate(), Math.min(diaDoMes, ultimoDia));
+      const espera = diasEntre(hoje, vencimento);
+      assert.ok(espera >= 0 && espera <= 31, `vence em ${espera} dias`);
+    }),
+    OPCOES,
+  );
+});
+
 // --------------------------------------------------------- o próprio gerador
 
 test('o gerador de estados válidos produz estados com conteúdo, não só estados vazios', () => {
@@ -433,6 +490,7 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
     tarefas: parte((e) => e.tarefas.length > 0),
     'tarefas com prazo': parte((e) => e.tarefas.some((x) => x.prazo)),
     'tarefas que repetem': parte((e) => e.tarefas.some((x) => x.repeticao)),
+    'tarefas com aviso antecipado': parte((e) => e.tarefas.some((x) => x.avisos.length > 0)),
     'registros de hábito': parte(diasRegistrados),
     'notas de hábito': parte((e) => Object.keys(e.notasHabito).length > 0),
     pausas: parte((e) => e.pausas.length > 0),

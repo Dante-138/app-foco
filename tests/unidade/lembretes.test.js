@@ -1,8 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AVISOS_DE_CONTA,
   HORA_PADRAO,
+  MAXIMO_DE_ANTECEDENCIA,
   MAXIMO_DE_LEMBRETES,
+  OPCOES_DE_AVISO,
+  avisosValidos,
   idDaNotificacao,
   planejar,
 } from '../../www/js/nucleo/lembretes.js';
@@ -23,6 +27,7 @@ function tarefa(id, extra = {}) {
     notas: '',
     prazo: '2026-11-13',
     hora: null,
+    avisos: [],
     feita: false,
     criadaEm: relogio,
     ...extra,
@@ -135,4 +140,57 @@ test('duas tarefas com o mesmo número de notificação: fica só o lembrete mai
 
 test('sem tarefas, o plano é vazio', () => {
   assert.deepEqual(planejar([], LISTAS, AGORA), []);
+});
+
+// ------------------------------------------------------ aviso antecipado
+
+test('avisosValidos: dias inteiros de 1 ao máximo, sem repetir, em ordem; o resto vira vazio', () => {
+  assert.equal(MAXIMO_DE_ANTECEDENCIA, 30);
+  assert.deepEqual(avisosValidos([7, 3, 3, 1, 0, 31, -1, 2.5, '1', null]), [1, 3, 7]);
+  for (const errado of [undefined, null, 'x', 3, { 0: 1 }]) assert.deepEqual(avisosValidos(errado), []);
+  // O que a interface oferece e o padrão das contas passam pela validação sem mudar.
+  assert.deepEqual(avisosValidos([...OPCOES_DE_AVISO]), [1, 3, 7]);
+  assert.deepEqual(avisosValidos([...AVISOS_DE_CONTA]), [1, 3]);
+});
+
+test('tarefa com aviso antecipado: avisa em cada dia pedido, no prazo e na manhã seguinte', () => {
+  const conta = tarefa('luz', { titulo: 'Luz', listaId: 'casa', prazo: '2026-11-20', avisos: [1, 3] });
+  const plano = planejar([conta], LISTAS, AGORA);
+  assert.deepEqual(
+    plano.map((l) => [l.quando, l.corpo]),
+    [
+      ['2026-11-17T09:00', 'Vence em 3 dias, sex., 20 de nov. · Casa'],
+      ['2026-11-19T09:00', 'Vence amanhã, sex., 20 de nov. · Casa'],
+      ['2026-11-20T09:00', 'Casa'],
+      ['2026-11-21T09:00', 'Venceu ontem e continua pendente · Casa'],
+    ],
+  );
+  assert.ok(plano.every((l) => l.tarefaId === 'luz' && l.titulo === 'Luz'));
+  assert.equal(new Set(plano.map((l) => l.id)).size, 4);
+  assert.equal(plano[2].id, idDaNotificacao('luz')); // o do prazo continua com o número de sempre
+  assert.deepEqual(Object.keys(plano[0]).sort(), ['corpo', 'id', 'quando', 'tarefaId', 'titulo']);
+});
+
+test('aviso antecipado: o que já passou fica de fora; tarefa com horário avisa antes de manhã', () => {
+  const prova = tarefa('prova', { prazo: '2026-11-14', hora: '19:30', avisos: [1, 3, 7] });
+  assert.deepEqual(
+    planejar([prova], LISTAS, AGORA).map((l) => l.quando),
+    ['2026-11-13T09:00', '2026-11-14T19:30', '2026-11-15T09:00'],
+  );
+});
+
+test('atrasada com aviso: sobra só o lembrete da manhã seguinte, e depois dele mais nenhum', () => {
+  const vencida = tarefa('agua', { prazo: '2026-11-12', hora: '09:00', avisos: [1] });
+  assert.deepEqual(
+    planejar([vencida], LISTAS, AGORA).map((l) => l.quando),
+    ['2026-11-13T09:00'],
+  );
+  assert.deepEqual(planejar([vencida], LISTAS, '2026-11-13T09:00'), []);
+});
+
+test('sem aviso antecipado não há lembrete de atraso; concluir cancela todos os avisos', () => {
+  const simples = tarefa('simples', { prazo: '2026-11-20' });
+  assert.equal(planejar([simples], LISTAS, AGORA).length, 1);
+  const paga = tarefa('paga', { prazo: '2026-11-20', avisos: [1, 3], feita: true });
+  assert.deepEqual(planejar([paga], LISTAS, AGORA), []);
 });

@@ -47,7 +47,10 @@ function v1ParaV2(dados) {
 // escolha já foi feita. Não há o que converter: sem o campo, a rotina não tem dia nenhum
 // e nada muda sozinho, como antes.
 
-// A v8 e a v9 pertencem a outras mudanças de formato da mesma leva (no PR dela);
+// A v8 acrescenta os avisos antecipados da tarefa (dias antes do prazo). Não há o que
+// converter: sem o campo, a tarefa avisa só no prazo, como antes.
+
+// A v9 pertence a outra mudança de formato da mesma leva (no PR dela);
 // aqui o passo só sobe o número.
 
 // A v10 acrescenta as pausas (férias e feriados). Não há o que converter: sem o campo, não

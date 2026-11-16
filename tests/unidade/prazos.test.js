@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agrupar, ordenar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
+import { agrupar, ordenar, porPrazo, quantoFalta, rotuloData } from '../../www/js/nucleo/prazos.js';
 
 const HOJE = '2026-11-12';
 
@@ -116,6 +116,16 @@ test('rotuloData mostra dia da semana no ano corrente e o ano quando é outro', 
   assert.match(rotuloData('2026-11-13', HOJE), /sex.*13 de nov/);
   assert.doesNotMatch(rotuloData('2026-11-13', HOJE), /2026/);
   assert.match(rotuloData('2027-02-10', HOJE), /10 de fev.*2027/);
+});
+
+test('quantoFalta: contagem regressiva até o prazo e, depois dele, há quanto venceu', () => {
+  assert.equal(quantoFalta('2026-11-12', HOJE), 'hoje');
+  assert.equal(quantoFalta('2026-11-13', HOJE), 'amanhã');
+  assert.equal(quantoFalta('2026-11-14', HOJE), 'em 2 dias');
+  assert.equal(quantoFalta('2027-01-01', HOJE), 'em 50 dias');
+  assert.equal(quantoFalta('2026-11-11', HOJE), 'venceu ontem');
+  assert.equal(quantoFalta('2026-11-10', HOJE), 'venceu há 2 dias');
+  assert.equal(quantoFalta('2025-11-12', HOJE), 'venceu há 365 dias');
 });
 
 test('virada do ano: 1º de janeiro é "Amanhã" em 31 de dezembro', () => {

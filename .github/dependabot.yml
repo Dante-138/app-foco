@@ -2,6 +2,10 @@
 # Só npm e GitHub Actions. O Gradle fica de fora: as versões do projeto Android são as que o
 # Capacitor define, e atualizá-las por fora pode quebrar o build. Falha de segurança em qualquer
 # ecossistema continua chegando pelos alertas do repositório.
+#
+# cooldown: só propõe versão publicada há pelo menos 7 dias. Pacote comprometido costuma ser
+# descoberto e retirado nos primeiros dias. Não vale para as atualizações de segurança, que
+# chegam na hora.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -11,6 +15,8 @@ updates:
       day: monday
       time: '06:00'
       timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
     # Um PR por vez, com todas as atualizações da semana juntas.
     open-pull-requests-limit: 1
     groups:
@@ -31,6 +37,8 @@ updates:
       day: monday
       time: '06:00'
       timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 1
     groups:
       actions:

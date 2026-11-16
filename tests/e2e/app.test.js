@@ -1031,7 +1031,7 @@ test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazi
 
   // Segurar, escolher Feito e escrever a nota: um Salvar grava os dois.
   await segurar(botao(pagina, 'Leitura, hoje: não feito'));
-  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Leitura (hoje)' }));
   assert.equal(await marcada('Vazio'), 'true');
   await opcao('Feito').click();
   await pagina.getByLabel('Nota do dia').fill('Li no ônibus');
@@ -1057,12 +1057,12 @@ test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazi
 
   // Hábito numérico: quantidade no lugar de Feito. Texto que não é número não salva.
   await segurar(botao(pagina, 'Água, hoje: 0 copos'));
-  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Água (hoje)' }));
   assert.equal(await marcada('Vazio'), 'true');
   await opcao('Quantidade').click();
   await pagina.getByLabel('Quantidade (copos)').fill('muitos');
   await botao(pagina, 'Salvar').click();
-  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Água (hoje)' }));
   await pagina.getByLabel('Quantidade (copos)').fill('8');
   await botao(pagina, 'Salvar').click();
   await visivel(botao(pagina, 'Água, hoje: 8 copos'));
@@ -1080,7 +1080,7 @@ test('hábito: segurar a célula abre a nota do dia, sem mudar a marca; o ponto 
   await botao(pagina, 'Salvar').click();
 
   await segurar(botao(pagina, 'Leitura, hoje: não feito'));
-  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Leitura (hoje)' }));
   await pagina.getByLabel('Nota do dia').fill('  Dia de viagem  ');
   await botao(pagina, 'Salvar').click();
 
@@ -1757,6 +1757,103 @@ test('pausas: férias e feriados deixam os hábitos de folga e a sequência não
   assert.deepEqual(erros, []);
 });
 
+test('painel: o item do horário atual, quanto falta para o próximo e as sequências em risco', async (t) => {
+  // O relógio começa na sexta, 13/11/2026, às 07:10.
+  const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
+  const seguidos = (n, valor) =>
+    Object.fromEntries(
+      Array.from({ length: n }, (_, i) => [`2026-11-${String(12 - i).padStart(2, '0')}`, valor]),
+    );
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'painel',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('i1', 'Levantar', '06:30'),
+          item('i2', 'Arrumar a cama'),
+          item('i3', 'Café', '07:00'),
+          item('i4', 'Mochila'),
+          item('i5', 'Chave'),
+          item('i6', 'Ônibus'),
+          item('i7', 'Bater o ponto', '09:00'),
+        ],
+      },
+    ],
+    marcasRotina: { data: '2026-11-13', porRotina: { r: ['i2'] } },
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'numero', unidade: 'copos', meta: 8 },
+      { id: 'h3', nome: 'Alongar', cor: 'azul', tipo: 'simnao' },
+      { id: 'h4', nome: 'Já feito', cor: 'azul', tipo: 'simnao' },
+    ],
+    registros: {
+      h1: seguidos(5, 'feito'),
+      h2: seguidos(3, 8),
+      h3: { '2026-11-12': 'feito' }, // um dia só não é sequência
+      h4: { ...seguidos(9, 'feito'), '2026-11-13': 'feito' },
+    },
+  });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: (contexto) => contexto.clock.install({ time: new Date('2026-11-13T07:10:00-03:00') }),
+  });
+  const linhas = () => pagina.locator('.painel-bloco .rotina-item').allTextContents();
+  const emRisco = () =>
+    pagina.locator('.painel-bloco', { hasText: 'Sequências em risco' }).locator('.tarefa').allTextContents();
+
+  // Bloco vazio não deixa texto solto na tela: o Painel só tem elementos, nunca a palavra "null".
+  const soElementos = () =>
+    pagina.evaluate(() => {
+      const conteudo = document.querySelector('#conteudo');
+      return (
+        [...conteudo.childNodes].every((no) => no.nodeType === 1) && !conteudo.textContent.includes('null')
+      );
+    });
+
+  // 07:10: o item das 07:00 é o de agora; o das 06:30 ficou para trás; o das 09:00 aparece com a contagem.
+  await visivel(pagina.getByText('1 de 7 · 1 atrasado'));
+  assert.deepEqual(await linhas(), ['07:00Caféagora', 'Mochila', 'Chave', '09:00Bater o pontoem 1 h 50']);
+  assert.equal(await soElementos(), true, 'sem tarefa para hoje'); // o bloco das tarefas está vazio
+
+  // Marcar o item de agora: a lista segue dali, sem a etiqueta.
+  await pagina.getByRole('checkbox', { name: /Café/ }).click();
+  await visivel(pagina.getByText('2 de 7 · 1 atrasado'));
+  assert.deepEqual(await linhas(), ['Mochila', 'Chave', 'Ônibus', '09:00Bater o pontoem 1 h 50']);
+
+  // O relógio anda com o Painel aberto: às 09:00 o item do ponto vira o de agora.
+  await pagina.clock.fastForward('01:50:00');
+  await visivel(pagina.locator('.painel-bloco .rotina-item', { hasText: 'Bater o pontoagora' }));
+  assert.deepEqual(await linhas(), ['09:00Bater o pontoagora', '06:30Levantar', 'Mochila']);
+  await visivel(pagina.getByText('2 de 7 · 1 atrasado')); // só item com horário conta como atrasado
+
+  // Sequências em risco: da mais longa para a mais curta; feito hoje e sequência de um dia ficam fora.
+  assert.deepEqual(await emRisco(), ['Leitura5 dias seguidos', 'Água3 dias seguidos']);
+
+  // Marcar ali mesmo: sim ou não vira feito na hora; o numérico abre a quantidade.
+  await pagina.getByRole('checkbox', { name: 'Marcar hoje: Leitura' }).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.painel-bloco .tarefa').length === 1,
+    null,
+    ESPERA,
+  );
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h1['2026-11-13'], 'feito');
+  await pagina.getByRole('checkbox', { name: 'Marcar hoje: Água' }).click();
+  await pagina.getByLabel(/Quantidade/).fill('8');
+  await botao(pagina, 'Salvar').click();
+  await pagina.waitForFunction(
+    () =>
+      ![...document.querySelectorAll('.grupo-titulo')].some((x) => x.textContent === 'Sequências em risco'),
+    null,
+    ESPERA,
+  );
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h2['2026-11-13'], 8);
+  assert.equal(await soElementos(), true, 'sem tarefa e sem sequência em risco'); // os dois blocos vazios
+  assert.deepEqual(erros, []);
+});
+
 // ----------------------------------------------------------------- lembretes
 
 test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {
@@ -1797,6 +1894,107 @@ test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; 
   await pagina.getByRole('checkbox', { name: 'Concluir: Reunião' }).click();
   await pendentes(0);
   assert.equal(await pagina.evaluate(() => window.sistemaDeLembretes.pedidos), 1);
+  assert.deepEqual(erros, []);
+});
+
+test('prazos: conta mensal com aviso antecipado, contagem regressiva e atrasada sem mudar de data', async (t) => {
+  // O relógio começa no sábado, 14/11/2026, às 10:00. A tarefa atrasada venceu na terça, dia 10.
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Casa' }],
+    tarefas: [
+      { id: 'velha', listaId: 'l', titulo: 'Devolver o livro', prazo: '2026-11-10', criadaEm: 1 },
+      { id: 'longe', listaId: 'l', titulo: 'Renovar a matrícula', prazo: '2026-11-26', criadaEm: 2 },
+    ],
+  });
+  const lembretes = comLembretes('granted');
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: new Date('2026-11-14T10:00:00-03:00') });
+      await lembretes(contexto);
+    },
+  });
+  const tarefas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  // Espera o sistema ter, para uma tarefa, exatamente estes momentos agendados (relógio local).
+  // O app agenda um instante depois de salvar, então conferir na hora pegaria o plano antigo.
+  const agendados = (titulo, esperado) =>
+    pagina.waitForFunction(
+      ([nome, momentos]) => {
+        const p = (v) => String(v).padStart(2, '0');
+        const dela = window.sistemaDeLembretes.pendentes
+          .filter((x) => x.title === nome)
+          .map((x) => new Date(x.schedule.at))
+          .map((d) => `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`)
+          .sort();
+        return dela.join() === momentos.join();
+      },
+      [titulo, esperado],
+      ESPERA,
+    );
+  const linha = (titulo) => pagina.locator('.tarefa', { hasText: titulo });
+
+  // Contagem regressiva na pendente; a atrasada fica em vermelho, com a data dela e há quanto venceu.
+  await visivel(linha('Renovar a matrícula').getByText('em 12 dias'));
+  const atrasada = linha('Devolver o livro').locator('.tarefa-sub.atrasada');
+  assert.match(await atrasada.textContent(), /10 de nov.*venceu há 4 dias/);
+  assert.equal((await tarefas()).find((x) => x.id === 'velha').prazo, '2026-11-10');
+
+  // Conta mensal pelo atalho da tarefa nova: o título digitado vai junto.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Luz');
+  await botao(pagina, 'Conta mensal').click();
+  await visivel(pagina.getByRole('heading', { name: 'Nova conta mensal' }));
+  assert.equal(await pagina.getByLabel('Nome').inputValue(), 'Luz');
+  assert.equal(await pagina.getByLabel('Dia do vencimento').inputValue(), '14'); // o dia de hoje
+  await pagina.getByLabel('Valor (opcional)').fill('cento e vinte');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Nova conta mensal' })); // valor que não é número não passa
+  await pagina.getByLabel('Valor (opcional)').fill('120');
+  await pagina.getByLabel('Dia do vencimento').fill('20');
+  await botao(pagina, 'Salvar').click();
+
+  const titulo = 'Luz - R$ 120,00';
+  await visivel(linha(titulo).getByText('em 6 dias, repete todo mês'));
+  const conta = (await tarefas()).find((x) => x.titulo === titulo);
+  assert.deepEqual(
+    [conta.prazo, conta.repeticao, conta.avisos, conta.listaId],
+    ['2026-11-20', { cada: 1, unidade: 'mes' }, [1, 3], 'l'],
+  );
+  // Avisa 3 dias antes, 1 dia antes, no dia e, se ficar pendente, na manhã seguinte.
+  await agendados(titulo, ['17/11 09:00', '19/11 09:00', '20/11 09:00', '21/11 09:00']);
+
+  // Pagar a conta: a do mês seguinte já fica alocada, com os mesmos avisos.
+  await pagina.getByRole('checkbox', { name: `Concluir: ${titulo}` }).click();
+  await agendados(titulo, ['17/12 09:00', '19/12 09:00', '20/12 09:00', '21/12 09:00']);
+  const proxima = (await tarefas()).find((x) => x.titulo === titulo && !x.feita);
+  assert.deepEqual([proxima.prazo, proxima.avisos], ['2026-12-20', [1, 3]]);
+
+  // Aviso antecipado em qualquer tarefa, pelo formulário; "Sem data" tira os avisos.
+  await linha('Renovar a matrícula').locator('.tarefa-corpo').click();
+  await botao(pagina, 'Avisar 7 dias antes').click();
+  await botao(pagina, 'Avisar 1 dia antes').click();
+  assert.equal(await botao(pagina, 'Avisar 7 dias antes').getAttribute('aria-pressed'), 'true');
+  await botao(pagina, 'Salvar').click();
+  await agendados('Renovar a matrícula', ['19/11 09:00', '25/11 09:00', '26/11 09:00', '27/11 09:00']);
+  assert.deepEqual((await tarefas()).find((x) => x.id === 'longe').avisos, [1, 7]);
+
+  await linha('Renovar a matrícula').locator('.tarefa-corpo').click();
+  await botao(pagina, 'Sem data').click();
+  assert.equal(await botao(pagina, 'Avisar 7 dias antes').getAttribute('aria-pressed'), 'false');
+  await botao(pagina, 'Salvar').click();
+  await agendados('Renovar a matrícula', []);
+  const semData = (await tarefas()).find((x) => x.id === 'longe');
+  assert.deepEqual([semData.prazo, semData.avisos], [null, []]);
+
+  // A conta também nasce pelo menu da lista.
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Nova conta mensal').click();
+  await pagina.getByLabel('Nome').fill('Internet');
+  await pagina.getByLabel('Dia do vencimento').fill('5');
+  await botao(pagina, 'Salvar').click();
+  await visivel(linha('Internet').getByText('em 21 dias, repete todo mês')); // 05/12, sem valor no título
   assert.deepEqual(erros, []);
 });
 
@@ -2369,4 +2567,43 @@ test('hábito com dias da semana: fora deles o dia vira folga sem gravar nada', 
   }
   assert.equal(await pagina.locator('.dia-semana[aria-pressed=true]').count(), 1);
   assert.deepEqual(erros, []);
+});
+
+test('título grande: encolhe ao rolar a lista e volta ao subir', async (t) => {
+  const { pagina } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const escalaDoTitulo = (rolagem) =>
+    pagina.evaluate(async (y) => {
+      const conteudo = document.getElementById('conteudo');
+      if (!conteudo.querySelector('.teste-altura')) {
+        const alto = document.createElement('div');
+        alto.className = 'teste-altura';
+        alto.style.height = '3000px';
+        conteudo.append(alto);
+      }
+      conteudo.scrollTop = y;
+      await new Promise((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(r));
+      });
+      const h1 = document.getElementById('titulo');
+      const linha = getComputedStyle(document.querySelector('.topo'), '::after').opacity;
+      return {
+        tamanho: getComputedStyle(h1).fontSize,
+        escala: new DOMMatrix(getComputedStyle(h1).transform).a,
+        linha: Number(linha),
+      };
+    }, rolagem);
+
+  const noTopo = await escalaDoTitulo(0);
+  assert.equal(noTopo.tamanho, '34px');
+  assert.equal(noTopo.escala, 1);
+  assert.equal(noTopo.linha, 0);
+
+  const rolado = await escalaDoTitulo(200);
+  assert.ok(Math.abs(rolado.escala - 0.647) < 0.01, `escala ${rolado.escala}`);
+  assert.equal(rolado.linha, 1);
+
+  const deVolta = await escalaDoTitulo(0);
+  assert.equal(deVolta.escala, 1);
 });
