@@ -1,12 +1,10 @@
 // Regras dos hábitos, sem interface: valores, metas, pontuação e sequências.
 // O registro de um hábito é { 'AAAA-MM-DD': 'feito' | 'pulado' | número }.
 
-import { deIso, diasEntre, somaDias } from './datas.js';
+import { DIAS_DA_SEMANA, deIso, diasEntre, somaDias } from './datas.js';
 
 // Dias da semana em que o hábito vale (0 = domingo, como Date.getDay). Sem a lista, todos.
-export const TODOS_OS_DIAS = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
-
-const diasDe = (habito) => habito.diasDaSemana ?? TODOS_OS_DIAS;
+const diasDe = (habito) => habito.diasDaSemana ?? DIAS_DA_SEMANA;
 const todoDia = (habito) => diasDe(habito).length === 7;
 
 // O hábito pede alguma coisa neste dia? Fora dos dias dele, o dia é folga automática.
