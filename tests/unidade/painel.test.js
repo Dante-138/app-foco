@@ -3,14 +3,23 @@ import assert from 'node:assert/strict';
 import { PROXIMOS_DA_ROTINA, TAREFAS_NO_PAINEL, resumoDoDia } from '../../www/js/nucleo/painel.js';
 
 const HOJE = '2026-11-13';
-const item = (id) => ({ id, tipo: 'item', texto: id, hora: null });
+const item = (id, hora = null) => ({ id, tipo: 'item', texto: id, hora });
 const secao = (id) => ({ id, tipo: 'secao', texto: id, hora: null });
-const vazio = { rotina: null, marcadas: new Set(), habitos: [], registros: {}, tarefas: [], dia: HOJE };
+const vazio = {
+  rotina: null,
+  marcadas: new Set(),
+  habitos: [],
+  registros: {},
+  tarefas: [],
+  dia: HOJE,
+  hora: '10:00',
+};
 
 test('sem nada, tudo zera', () => {
   assert.deepEqual(resumoDoDia(vazio), {
-    rotina: { feitos: 0, total: 0, proximos: [] },
+    rotina: { feitos: 0, total: 0, proximos: [], agora: null, depois: null, atrasados: 0 },
     habitos: { feitos: 0, total: 0 },
+    emRisco: { total: 0, primeiras: [] },
     tarefas: { total: 0, atrasadas: 0, primeiras: [] },
   });
 });
@@ -66,6 +75,82 @@ test('tarefas: pendentes com prazo até hoje, atrasadas primeiro, até o limite'
   assert.deepEqual(
     resumo.primeiras.map((t) => t.titulo),
     ['atrasada', 'hoje à tarde', 'hoje sem hora', 'mais 0', 'mais 1'],
+  );
+});
+
+// ------------------------------------------------------- o relógio na rotina
+
+const COM_HORAS = {
+  itens: [
+    secao('MANHÃ'),
+    item('acordar', '06:30'),
+    item('cama'),
+    item('cafe', '07:00'),
+    item('mochila'),
+    item('chave'),
+    item('onibus'),
+    secao('TRABALHO'),
+    item('ponto', '09:00'),
+    item('almoco', '12:00'),
+  ],
+};
+const noRelogio = (hora, marcadas = []) => {
+  const { rotina } = resumoDoDia({ ...vazio, rotina: COM_HORAS, marcadas: new Set(marcadas), hora });
+  return { ...rotina, proximos: rotina.proximos.map((i) => i.id) };
+};
+
+test('rotina com horário: a lista começa no item do horário atual e traz o próximo horário', () => {
+  assert.deepEqual(noRelogio('07:10', ['acordar', 'cama']), {
+    feitos: 2,
+    total: 8,
+    proximos: ['cafe', 'mochila', 'chave', 'ponto'], // o das 09:00 entra além do limite
+    agora: 'cafe',
+    depois: { id: 'ponto', faltam: 110 },
+    atrasados: 0,
+  });
+});
+
+test('rotina com horário: o que ficou para trás conta como atrasado e vem depois na lista', () => {
+  const r = noRelogio('09:30', ['acordar']);
+  assert.deepEqual(r.proximos, ['ponto', 'almoco', 'cama']);
+  assert.deepEqual([r.agora, r.depois, r.atrasados], ['ponto', { id: 'almoco', faltam: 150 }, 1]);
+});
+
+test('rotina com horário: item atual já marcado não é o "agora"; a lista segue do seguinte', () => {
+  const r = noRelogio('07:10', ['acordar', 'cama', 'cafe']);
+  assert.deepEqual(r.proximos, ['mochila', 'chave', 'onibus', 'ponto']);
+  assert.equal(r.agora, null);
+});
+
+test('rotina com horário: próximo já marcado some do "depois"; antes do primeiro horário não há "agora"', () => {
+  assert.equal(noRelogio('07:10', ['ponto']).depois, null);
+  const cedo = noRelogio('05:00');
+  assert.deepEqual(cedo.proximos, ['acordar', 'cama', 'cafe']);
+  assert.deepEqual([cedo.agora, cedo.depois], [null, { id: 'acordar', faltam: 90 }]);
+});
+
+test('sequências em risco: as primeiras, da mais longa para a mais curta, e o total', () => {
+  const habitos = Array.from({ length: 7 }, (_, i) => ({ id: `h${i}`, tipo: 'simnao', arquivado: false }));
+  // h0 vem de 2 dias seguidos até ontem (12/11), h1 de 3, e assim por diante.
+  const registros = Object.fromEntries(
+    habitos.map((x, i) => [
+      x.id,
+      Object.fromEntries(
+        Array.from({ length: i + 2 }, (_, d) => [`2026-11-${String(12 - d).padStart(2, '0')}`, 'feito']),
+      ),
+    ]),
+  );
+  const { emRisco } = resumoDoDia({ ...vazio, habitos, registros });
+  assert.equal(emRisco.total, 7);
+  assert.deepEqual(
+    emRisco.primeiras.map(({ habito, dias }) => [habito.id, dias]),
+    [
+      ['h6', 8],
+      ['h5', 7],
+      ['h4', 6],
+      ['h3', 5],
+      ['h2', 4],
+    ],
   );
 });
 
