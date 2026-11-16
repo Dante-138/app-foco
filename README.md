@@ -158,11 +158,11 @@ Sem eles o workflow só avisa e termina verde. Nada disso é lido por agente nen
 
 4. **Impressão digital do certificado**, uma vez: o job que assina reprova se o APK sair com
    outra chave, e compara com a linha que você pôs em `android/assinatura-sha256.txt` (a
-   impressão digital é pública). Para pegar a sua, num APK já instalado e assinado com a
-   chave fixa:
+   impressão digital é pública). O build local já mostra a sua, no fim, depois de
+   "== Conferindo a assinatura":
 
    ```bash
-   apksigner verify --print-certs saida/foco-debug.apk
+   pwsh tools/apk.ps1 -AceitoLicencaAndroid -Tipo debug
    ```
 
    Copie o valor de `certificate SHA-256 digest` para o arquivo, numa linha sem `#`, e faça um PR.
