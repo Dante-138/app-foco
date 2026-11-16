@@ -1,6 +1,7 @@
-// Aba Painel: o dia numa tela só, com pouco texto. Rotina aberta (anel e próximos itens),
-// hábitos e tarefas de hoje. Marca item da rotina e conclui tarefa ali mesmo; o resto
-// leva para a aba de cada coisa. Não guarda nada próprio: lê os mesmos dados das abas.
+// Aba Painel: o dia numa tela só, com pouco texto. Clima e agenda (quando ligados em Ajustes),
+// rotina aberta (anel e próximos itens), hábitos e tarefas de hoje. Marca item da rotina e
+// conclui tarefa ali mesmo; o resto leva para a aba de cada coisa. Não guarda nada próprio:
+// lê os mesmos dados das abas, e a agenda e o clima de js/agenda.js.
 
 import { estado, marcasDeHoje } from './store.js';
 import { hoje } from './nucleo/datas.js';
@@ -9,6 +10,7 @@ import { rotuloData } from './nucleo/prazos.js';
 import { h, svg, icone, estadoVazio } from './ui.js';
 import { rotinas, alternarItemDaRotina } from './rotinas.js';
 import { tarefas, concluirTarefa } from './tarefas.js';
+import { agendaEClimaDoDia } from './agenda.js';
 
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -42,6 +44,35 @@ function contador(rotulo, valor, aba) {
     { type: 'button', class: 'painel-contador', onclick: () => irPara(aba) },
     h('span', {}, rotulo),
     h('b', {}, valor),
+  );
+}
+
+// Eventos dos calendários: hoje e, se houver, amanhã. Só leitura; sem evento, o bloco não aparece.
+function blocoDaAgenda({ hoje: deHoje, amanha }) {
+  if (!deHoje.length && !amanha.length) return null;
+  const grupo = (titulo, eventos) =>
+    eventos.length
+      ? [
+          h('h3', { class: 'grupo-titulo' }, titulo),
+          h(
+            'ul',
+            {},
+            eventos.map((evento) =>
+              h(
+                'li',
+                { class: 'painel-evento' },
+                h('span', { class: 'hora' }, evento.hora ?? 'dia inteiro'),
+                h('div', {}, evento.titulo, h('span', { class: 'tarefa-sub' }, evento.calendario)),
+              ),
+            ),
+          ),
+        ]
+      : null;
+  return h(
+    'section',
+    { class: 'cartao painel-bloco' },
+    grupo('Agenda de hoje', deHoje),
+    grupo('Amanhã', amanha),
   );
 }
 
@@ -157,9 +188,13 @@ function render(raiz) {
     dia,
   });
   const { tarefas: deHoje } = resumo;
+  const { clima, agenda } = agendaEClimaDoDia();
 
-  raiz.replaceChildren(
+  // O replaceChildren nativo escreveria "null" na tela: os blocos sem conteúdo saem da lista.
+  const blocos = [
     h('p', { class: 'painel-data' }, fmtDia.format(new Date())),
+    clima ? h('p', { class: 'painel-data' }, clima) : null,
+    blocoDaAgenda(agenda),
     blocoDaRotina(rotina, resumo.rotina),
     h(
       'div',
@@ -174,7 +209,8 @@ function render(raiz) {
       ),
     ),
     blocoDasTarefas(deHoje, dia),
-  );
+  ];
+  raiz.replaceChildren(...blocos.filter(Boolean));
 }
 
 export const painel = {

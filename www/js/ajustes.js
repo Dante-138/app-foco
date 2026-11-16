@@ -1,4 +1,4 @@
-// Folha de ajustes do app: aparência, lembretes e backup dos dados.
+// Folha de ajustes do app: aparência, lembretes, agenda e clima, e backup dos dados.
 
 import { estado, salvar, substituirEstado } from './store.js';
 import { hoje } from './nucleo/datas.js';
@@ -14,6 +14,15 @@ import {
   pedirPermissaoDeLembretes,
   permissaoDeLembretes,
 } from './lembretes.js';
+import { LIMITES_DA_REDE, MAXIMO_DE_CALENDARIOS, RECUSA } from './nucleo/rede.js';
+import {
+  adicionarCalendario,
+  calendarios,
+  climaLigado,
+  definirClima,
+  redeDisponivel,
+  removerCalendario,
+} from './agenda.js';
 
 const TEMAS = [
   ['escuro', 'Escuro'],
@@ -184,6 +193,113 @@ function secaoDeLembretes() {
   );
 }
 
+// -------------------------------------------------------- agenda e clima
+
+const RECUSAS_DE_CALENDARIO = {
+  [RECUSA.SEM_NOME]: 'Dê um nome ao calendário.',
+  [RECUSA.LINK_RECUSADO]:
+    'Link recusado. Vale só link https do Google Calendar (calendar.google.com) ou do Blackboard (endereço terminado em .blackboard.com).',
+  [RECUSA.REPETIDO]: 'Este link já está na lista.',
+  [RECUSA.LIMITE]: `O limite é de ${MAXIMO_DE_CALENDARIOS} calendários. Remova um para pôr outro.`,
+};
+
+function secaoDaAgenda() {
+  if (!redeDisponivel()) {
+    return h(
+      'div',
+      { class: 'rotulo' },
+      'Agenda e clima',
+      h('p', { class: 'dica' }, 'A agenda e o clima funcionam no app Android.'),
+    );
+  }
+
+  const interruptor = h('button', { type: 'button', class: 'botao contorno', role: 'switch' });
+  const lista = h('ul', { 'aria-label': 'Calendários' });
+  const nome = h('input', {
+    class: 'entrada',
+    maxLength: LIMITES_DA_REDE.nomeCalendario,
+    autocomplete: 'off',
+  });
+  // O link é um segredo: depois de aceito, o campo é limpo e a lista mostra só o host.
+  const link = h('input', {
+    class: 'entrada',
+    inputMode: 'url',
+    autocapitalize: 'off',
+    autocomplete: 'off',
+    spellcheck: false,
+  });
+  const recusa = h('p', { class: 'dica erro', role: 'alert', hidden: true });
+
+  const desenhar = () => {
+    interruptor.setAttribute('aria-checked', String(climaLigado()));
+    interruptor.textContent = climaLigado() ? 'Clima ligado' : 'Clima desligado';
+    const itens = calendarios().map((calendario) =>
+      h(
+        'li',
+        { class: 'linha-botoes' },
+        h('span', { class: 'espaco' }, `${calendario.nome} (${calendario.host})`),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'botao contorno',
+            'aria-label': `Remover ${calendario.nome}`,
+            onclick: () => {
+              removerCalendario(calendario.id);
+              desenhar();
+            },
+          },
+          'Remover',
+        ),
+      ),
+    );
+    lista.hidden = !itens.length;
+    lista.replaceChildren(...itens);
+  };
+
+  interruptor.addEventListener('click', () => {
+    definirClima(!climaLigado());
+    desenhar();
+  });
+  const aoAdicionar = (e) => {
+    e.preventDefault();
+    const motivo = adicionarCalendario(nome.value, link.value);
+    recusa.hidden = !motivo;
+    recusa.textContent = motivo ? RECUSAS_DE_CALENDARIO[motivo] : '';
+    if (motivo) return;
+    nome.value = '';
+    link.value = '';
+    desenhar();
+  };
+  desenhar();
+
+  return h(
+    'div',
+    { class: 'rotulo' },
+    'Agenda e clima',
+    h('div', { class: 'linha-botoes inicio' }, interruptor),
+    h('p', { class: 'dica' }, 'Clima de São Paulo, pelo Open-Meteo, no alto do Painel.'),
+    lista,
+    h(
+      'form',
+      { class: 'folha-form', onsubmit: aoAdicionar },
+      campo('Nome do calendário', nome),
+      campo('Link do calendário (iCal)', link),
+      recusa,
+      h(
+        'div',
+        { class: 'linha-botoes inicio' },
+        h('button', { type: 'submit', class: 'botao contorno' }, 'Adicionar calendário'),
+      ),
+    ),
+    h(
+      'p',
+      { class: 'dica' },
+      'Vale o endereço secreto em formato iCal do Google Calendar e o link do calendário do Blackboard. Os links ficam só neste aparelho e não entram no backup.',
+    ),
+  );
+}
+
 // ---------------------------------------------------------------- folha
 
 export function abrirAjustes() {
@@ -217,6 +333,7 @@ export function abrirAjustes() {
       { class: 'folha-form' },
       h('div', { class: 'rotulo' }, 'Aparência', segmentos),
       secaoDeLembretes(),
+      secaoDaAgenda(),
       h(
         'div',
         { class: 'rotulo' },

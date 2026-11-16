@@ -1785,6 +1785,332 @@ test('lembretes: com a notificação bloqueada nada é agendado nem pedido; no n
   assert.deepEqual([...bloqueado.erros, ...semPlugin.erros], []);
 });
 
+// ------------------------------------------------------------ agenda e clima
+
+const CHAVE_REDE = 'foco:v1:rede';
+// Segunda-feira, 16/11/2026, 10h em São Paulo.
+const AGORA = new Date('2026-11-16T10:00:00-03:00');
+const HORA_MS = 60 * 60 * 1000;
+const AGENDA_GOOGLE = 'https://calendar.google.com/calendar/ical/exemplo/basic.ics';
+const AGENDA_BLACKBOARD = 'https://exemplo.blackboard.com/webapps/calendar/calendarFeed/exemplo/learn.ics';
+const ROTULO_DO_LINK = 'Link do calendário (iCal)';
+
+const ical = (...eventos) =>
+  [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    ...eventos.flatMap((linhas) => ['BEGIN:VEVENT', ...linhas, 'END:VEVENT']),
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+// O que cada endereço (host e caminho) responde. O clima vem como objeto, como o plugin
+// entrega uma resposta JSON; o calendário, como texto.
+const ROTAS = {
+  'api.open-meteo.com/v1/forecast': {
+    status: 200,
+    data: {
+      current: { time: '2026-11-16T10:00', temperature_2m: 24.3 },
+      daily: {
+        time: ['2026-11-16', '2026-11-17'],
+        temperature_2m_max: [27.4, 25.1],
+        temperature_2m_min: [18.4, 17.6],
+        precipitation_probability_max: [60, 14],
+      },
+    },
+  },
+  'calendar.google.com/calendar/ical/exemplo/basic.ics': {
+    status: 200,
+    data: ical(
+      ['UID:1', 'SUMMARY:Dentista', 'DTSTART;TZID=America/Sao_Paulo:20261116T140000'],
+      // Toda segunda e terça desde o começo do mês: hoje e amanhã.
+      ['UID:2', 'SUMMARY:Aula de cálculo', 'DTSTART:20261102T193000', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU'],
+      ['UID:3', 'SUMMARY:Feriado', 'DTSTART;VALUE=DATE:20261116'],
+      ['UID:4', 'SUMMARY:Reunião em UTC', 'DTSTART:20261116T110000Z'], // 8h em São Paulo
+      ['UID:5', 'SUMMARY:Semana que vem', 'DTSTART:20261125T100000'],
+    ),
+  },
+  // O Blackboard manda para outro caminho do mesmo host: o app segue.
+  'exemplo.blackboard.com/webapps/calendar/calendarFeed/exemplo/learn.ics': {
+    status: 302,
+    headers: { Location: '/webapps/calendar/calendarFeed/exemplo/novo.ics' },
+    data: '',
+  },
+  'exemplo.blackboard.com/webapps/calendar/calendarFeed/exemplo/novo.ics': {
+    status: 200,
+    data: ical(['UID:6', 'SUMMARY:Entrega do trabalho', 'DTSTART;VALUE=DATE:20261117']),
+  },
+  // Este manda para fora da lista de destinos: o app não segue.
+  'outro.blackboard.com/sair.ics': {
+    status: 302,
+    headers: { Location: 'https://example.com/entrar' },
+    data: '',
+  },
+};
+
+// Põe no lugar do plugin de HTTP do Android uma rede de mentira, que responde pela tabela
+// acima e guarda cada chamada em window.redeDeMentira. Com 'teste:sem-rede' no
+// sessionStorage, toda chamada falha, como no aparelho sem conexão.
+const comRede = (contexto) =>
+  contexto.addInitScript((rotas) => {
+    const chamadas = [];
+    window.redeDeMentira = chamadas;
+    window.Capacitor = {
+      Plugins: {
+        CapacitorHttp: {
+          get: (opcoes) => {
+            chamadas.push(opcoes);
+            if (sessionStorage.getItem('teste:sem-rede')) return Promise.reject(new Error('sem rede'));
+            const { hostname, pathname } = new URL(opcoes.url);
+            const resposta = rotas[hostname + pathname] ?? { status: 404, data: 'Não encontrado' };
+            return Promise.resolve({ headers: {}, url: opcoes.url, ...resposta });
+          },
+        },
+      },
+    };
+  }, ROTAS);
+
+const chamadasDeRede = (pagina) => pagina.evaluate(() => window.redeDeMentira.map((opcoes) => opcoes.url));
+const esperarChamadas = (pagina, n) =>
+  pagina.waitForFunction((esperado) => window.redeDeMentira.length === esperado, n, ESPERA);
+// Cada linha da agenda do Painel: [hora, título, calendário].
+const agendaNaTela = (pagina) =>
+  pagina
+    .locator('.painel-evento')
+    .evaluateAll((linhas) =>
+      linhas.map((linha) => [
+        linha.querySelector('.hora').textContent,
+        linha.querySelector('div').firstChild.textContent,
+        linha.querySelector('.tarefa-sub').textContent,
+      ]),
+    );
+const adicionarCalendario = async (pagina, nome, link) => {
+  await pagina.getByLabel('Nome do calendário').fill(nome);
+  await pagina.getByLabel(ROTULO_DO_LINK).fill(link);
+  await botao(pagina, 'Adicionar calendário').click();
+};
+
+test('agenda e clima: nada é pedido à rede até ligar; clima e calendário aparecem no Painel e ficam fora dos dados do app', async (t) => {
+  const salvo = JSON.stringify({ versao: 5, aba: 'painel' });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: AGORA });
+      await comRede(contexto);
+    },
+  });
+
+  // Quem só atualizou o app: clima desligado, nenhum calendário, nenhuma chamada, nada gravado.
+  await visivel(pagina.getByText('Sem rotina'));
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByRole('switch', { name: 'Clima desligado' }));
+  assert.deepEqual(await chamadasDeRede(pagina), []);
+  assert.equal(await lerSalvo(pagina, CHAVE_REDE), null);
+
+  // Ligar o clima faz a primeira chamada, só para o Open-Meteo e sem seguir redirecionamento.
+  await pagina.getByRole('switch', { name: 'Clima desligado' }).click();
+  await visivel(pagina.getByRole('switch', { name: 'Clima ligado' }));
+  await esperarChamadas(pagina, 1);
+  const [primeira] = await pagina.evaluate(() => window.redeDeMentira);
+  assert.equal(new URL(primeira.url).origin, 'https://api.open-meteo.com');
+  assert.equal(primeira.disableRedirects, true);
+
+  // Link fora da lista de destinos, ou sem https, é recusado com mensagem e não gera chamada.
+  for (const recusado of ['https://example.com/agenda.ics', AGENDA_GOOGLE.replace('https:', 'http:')]) {
+    await adicionarCalendario(pagina, 'Faculdade', recusado);
+    await visivel(pagina.getByRole('alert').filter({ hasText: 'Link recusado.' }));
+    assert.equal(await pagina.getByRole('list', { name: 'Calendários' }).isVisible(), false);
+  }
+  await adicionarCalendario(pagina, '  ', AGENDA_GOOGLE);
+  await visivel(pagina.getByText('Dê um nome ao calendário.'));
+  assert.equal((await chamadasDeRede(pagina)).length, 1);
+
+  // Link aceito: entra na lista só com o host; o endereço não volta para a tela.
+  await adicionarCalendario(pagina, 'Pessoal', AGENDA_GOOGLE);
+  await visivel(pagina.getByText('Pessoal (calendar.google.com)'));
+  assert.equal(await pagina.getByLabel(ROTULO_DO_LINK).inputValue(), '');
+  assert.equal(await pagina.getByRole('alert').isVisible(), false);
+  assert.equal((await pagina.locator('dialog[open]').textContent()).includes('basic.ics'), false);
+  await esperarChamadas(pagina, 2);
+
+  await adicionarCalendario(pagina, 'De novo', AGENDA_GOOGLE);
+  await visivel(pagina.getByText('Este link já está na lista.'));
+
+  // O Blackboard redireciona dentro do próprio host: uma chamada para cada endereço.
+  await adicionarCalendario(pagina, 'Faculdade', AGENDA_BLACKBOARD);
+  await visivel(pagina.getByText('Faculdade (exemplo.blackboard.com)'));
+  await esperarChamadas(pagina, 5);
+  assert.deepEqual((await chamadasDeRede(pagina)).slice(2), [
+    AGENDA_GOOGLE,
+    AGENDA_BLACKBOARD,
+    AGENDA_BLACKBOARD.replace('learn.ics', 'novo.ics'),
+  ]);
+
+  // No Painel: a linha do clima logo abaixo da data e a agenda de hoje e de amanhã, em ordem.
+  await botao(pagina, 'Fechar').click();
+  await visivel(pagina.getByText('São Paulo · 24° agora · 18° a 27° · chuva 60%'));
+  assert.deepEqual(await pagina.locator('.painel-bloco .grupo-titulo').allTextContents(), [
+    'Agenda de hoje',
+    'Amanhã',
+  ]);
+  assert.deepEqual(await agendaNaTela(pagina), [
+    ['dia inteiro', 'Feriado', 'Pessoal'],
+    ['08:00', 'Reunião em UTC', 'Pessoal'],
+    ['14:00', 'Dentista', 'Pessoal'],
+    ['19:30', 'Aula de cálculo', 'Pessoal'],
+    ['dia inteiro', 'Entrega do trabalho', 'Faculdade'],
+    ['19:30', 'Aula de cálculo', 'Pessoal'],
+  ]);
+  assert.equal((await pagina.locator('#conteudo').textContent()).includes('null'), false);
+
+  // Os links e o cache ficam na chave própria; os dados do app (e o backup, que é o mesmo
+  // texto) não levam nada disso, nem depois de o app salvar.
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Painel').click();
+  const dados = await lerSalvo(pagina, CHAVE);
+  assert.equal(JSON.parse(dados).aba, 'painel');
+  for (const trecho of ['calendar.google.com', 'blackboard', 'basic.ics', 'Dentista', 'calendarios']) {
+    assert.equal(dados.includes(trecho), false, `"${trecho}" nos dados do app`);
+  }
+  const rede = JSON.parse(await lerSalvo(pagina, CHAVE_REDE));
+  assert.equal(rede.clima, true);
+  assert.deepEqual(
+    rede.calendarios.map((c) => [c.nome, c.url]),
+    [
+      ['Pessoal', AGENDA_GOOGLE],
+      ['Faculdade', AGENDA_BLACKBOARD],
+    ],
+  );
+  assert.equal(rede.cache.agenda.eventos.length, 6);
+
+  // Recarregar com o cache novo mostra tudo sem chamar a rede de novo.
+  await recarregar(pagina);
+  await visivel(pagina.getByText('São Paulo · 24° agora · 18° a 27° · chuva 60%'));
+  assert.equal((await agendaNaTela(pagina)).length, 6);
+  assert.deepEqual(await chamadasDeRede(pagina), []);
+  assert.deepEqual(erros, []);
+});
+
+test('agenda e clima: sem rede o cache continua na tela; ao voltar, lê só o que venceu; remover e desligar limpam', async (t) => {
+  const salvo = JSON.stringify({ versao: 5, aba: 'painel' });
+  // Guardado há três horas: tudo vencido. O segundo calendário tem link fora da lista
+  // (dado adulterado): o app descarta ao ler e nunca chama esse endereço.
+  const guardado = JSON.stringify({
+    clima: true,
+    calendarios: [
+      { id: 'c1', nome: 'Pessoal', url: AGENDA_GOOGLE },
+      { id: 'c2', nome: 'Fora da lista', url: 'https://example.com/agenda.ics' },
+    ],
+    cache: {
+      agenda: {
+        em: AGORA.getTime() - 3 * HORA_MS,
+        eventos: [
+          { calendarioId: 'c1', titulo: 'Evento guardado', dia: '2026-11-16', hora: '15:00' },
+          { calendarioId: 'c2', titulo: 'De link recusado', dia: '2026-11-16', hora: null },
+        ],
+      },
+      clima: {
+        em: AGORA.getTime() - 3 * HORA_MS,
+        dados: { atual: 21, dias: [{ dia: '2026-11-16', minima: 18.4, maxima: 27.4, chuva: 60 }] },
+      },
+    },
+  });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: AGORA });
+      await comRede(contexto);
+      await contexto.addInitScript(
+        ([chave, valor]) => {
+          if (sessionStorage.getItem('teste:rede-semeada')) return;
+          sessionStorage.setItem('teste:rede-semeada', '1');
+          sessionStorage.setItem('teste:sem-rede', '1');
+          localStorage.setItem(chave, valor);
+        },
+        [CHAVE_REDE, guardado],
+      );
+    },
+  });
+  const voltarAoApp = () => pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+  // Sem rede: o app tenta, falha, e o que estava guardado continua na tela. A temperatura
+  // "agora" de três horas atrás não aparece; a previsão do dia, sim.
+  await esperarChamadas(pagina, 2);
+  assert.deepEqual((await chamadasDeRede(pagina)).map((endereco) => new URL(endereco).hostname).sort(), [
+    'api.open-meteo.com',
+    'calendar.google.com',
+  ]);
+  await visivel(pagina.getByText('São Paulo · 18° a 27° · chuva 60%'));
+  assert.deepEqual(await agendaNaTela(pagina), [['15:00', 'Evento guardado', 'Pessoal']]);
+  assert.equal(await lerSalvo(pagina, CHAVE_REDE), guardado); // falha não regrava nada
+
+  // A rede voltou e a pessoa voltou para o app: lê tudo de novo.
+  await pagina.evaluate(() => sessionStorage.removeItem('teste:sem-rede'));
+  await voltarAoApp();
+  await visivel(pagina.getByText('São Paulo · 24° agora · 18° a 27° · chuva 60%'));
+  await visivel(pagina.getByText('Dentista'));
+  assert.equal((await agendaNaTela(pagina)).length, 5);
+  assert.equal((await chamadasDeRede(pagina)).length, 4);
+
+  // Com o cache novo, voltar para o app não pede nada.
+  await voltarAoApp();
+  await pagina.waitForTimeout(300);
+  assert.equal((await chamadasDeRede(pagina)).length, 4);
+
+  // Passados 31 minutos, a agenda venceu e o clima ainda não: uma chamada, para o calendário.
+  await pagina.clock.fastForward('31:00');
+  await voltarAoApp();
+  await esperarChamadas(pagina, 5);
+  assert.equal((await chamadasDeRede(pagina)).at(-1), AGENDA_GOOGLE);
+
+  // Calendário que redireciona para fora da lista: o app não segue e não mostra nada dele.
+  await botao(pagina, 'Ajustes').click();
+  assert.deepEqual(
+    await pagina.getByRole('list', { name: 'Calendários' }).locator('li span').allTextContents(),
+    ['Pessoal (calendar.google.com)'],
+  );
+  await adicionarCalendario(pagina, 'Outro', 'https://outro.blackboard.com/sair.ics');
+  await visivel(pagina.getByText('Outro (outro.blackboard.com)'));
+  await esperarChamadas(pagina, 7);
+  assert.deepEqual((await chamadasDeRede(pagina)).slice(5).sort(), [
+    AGENDA_GOOGLE,
+    'https://outro.blackboard.com/sair.ics',
+  ]);
+
+  // Remover os calendários tira a agenda do Painel; desligar o clima tira a linha.
+  await botao(pagina, 'Remover Outro').click();
+  await botao(pagina, 'Remover Pessoal').click();
+  await pagina.getByRole('switch', { name: 'Clima ligado' }).click();
+  await visivel(pagina.getByRole('switch', { name: 'Clima desligado' }));
+  await botao(pagina, 'Fechar').click();
+  await pagina.waitForFunction(
+    () => !document.querySelector('.painel-evento') && document.querySelectorAll('.painel-data').length === 1,
+    null,
+    ESPERA,
+  );
+  assert.deepEqual(JSON.parse(await lerSalvo(pagina, CHAVE_REDE)), {
+    clima: false,
+    calendarios: [],
+    cache: { agenda: { em: 0, eventos: [] }, clima: { em: 0, dados: null } },
+  });
+  assert.equal((await chamadasDeRede(pagina)).length, 7);
+  assert.deepEqual(erros, []);
+});
+
+test('agenda e clima: no navegador, sem o plugin, a seção explica e o Painel não mostra nada', async (t) => {
+  const { pagina, erros } = await abrir(t, { salvo: JSON.stringify({ versao: 5, aba: 'painel' }) });
+  await visivel(pagina.getByText('Sem rotina'));
+  assert.equal(await pagina.locator('.painel-evento').count(), 0);
+  assert.equal(await pagina.locator('.painel-data').count(), 1);
+  // Sem tarefa para hoje, o bloco de tarefas não aparece (e não vira o texto "null").
+  assert.equal((await pagina.locator('#conteudo').textContent()).includes('null'), false);
+
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByText('A agenda e o clima funcionam no app Android.'));
+  assert.equal(await pagina.getByLabel(ROTULO_DO_LINK).count(), 0);
+  assert.equal(await lerSalvo(pagina, CHAVE_REDE), null);
+  assert.deepEqual(erros, []);
+});
+
 // ---------------------------------------------------------------------- tema
 
 test('tema: começa escuro mesmo com o sistema em claro, e a escolha persiste', async (t) => {

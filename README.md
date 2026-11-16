@@ -24,6 +24,10 @@ rotinas do dia, hábitos e tarefas com prazo.
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo.
+- **Agenda e clima**: no app Android, o Painel mostra os eventos de hoje e de amanhã dos
+  calendários cadastrados em Ajustes (link iCal do Google Calendar ou do Blackboard, até cinco) e
+  uma linha com o clima de São Paulo, pelo [Open-Meteo](https://open-meteo.com). Os dois nascem
+  desligados. O que foi lido fica guardado: sem rede, o Painel mostra a última leitura.
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
   Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
@@ -33,7 +37,8 @@ rotinas do dia, hábitos e tarefas com prazo.
 ## Como rodar
 
 Requer Node.js 22.8 ou mais novo. No navegador o app não tem dependências nem etapa de build;
-o app Android usa o Capacitor e o plugin de notificações locais dele.
+o app Android usa o Capacitor, o plugin de notificações locais dele e, para a agenda e o clima,
+o plugin de HTTP que já vem no Capacitor.
 
 ```bash
 node tools/serve.mjs
@@ -150,6 +155,10 @@ www/js/nucleo/          lógica pura: roda sem navegador, não toca DOM nem arma
   prazos.js             ordenação e agrupamento das tarefas por prazo
   repeticao.js          tarefas que se repetem: próxima data
   lembretes.js          plano de notificações das tarefas com prazo
+  ical.js               leitor de iCal: eventos, repetições e exceções dentro de uma janela de dias
+  clima.js              consulta ao Open-Meteo e leitura da resposta
+  rede.js               lista de destinos da rede e formato do que fica guardado da agenda e do clima
+  agenda.js             eventos de hoje e de amanhã para o Painel
   habito-calculo.js     leitura de números, metas, pontuação, sequências e filtros
   gesto.js              deslize do dedo para trocar de aba
   painel.js             resumo do dia para a aba Painel
@@ -163,6 +172,7 @@ www/js/                 interface: monta o DOM e chama o núcleo
   ui.js                 elementos, ícones e folhas
   rotinas.js, habitos.js, tarefas.js
   lembretes.js          agenda as notificações pelo plugin do Capacitor
+  agenda.js             busca os calendários e o clima pelo plugin de HTTP do Capacitor
   ajustes.js, tema.js, tema-inicial.js
 
 tests/unidade/          testes do núcleo e das ferramentas (node --test)
@@ -172,8 +182,18 @@ tools/                  servidor de desenvolvimento e portão de commits
 
 ## Dados e segurança
 
-- Os dados ficam só no aparelho (`localStorage`). O app não faz nenhuma conexão de rede, e a
-  política de segurança da página (CSP) bloqueia qualquer tentativa.
+- Os dados ficam só no aparelho (`localStorage`). A página não faz nenhuma conexão de rede, e a
+  política de segurança dela (CSP) bloqueia qualquer tentativa.
+- A única rede do app é a da agenda e do clima, no app Android, e só depois de ligada em Ajustes.
+  Ela sai pelo plugin nativo de HTTP, não pela página, e só para três destinos, conferidos no
+  código antes de cada chamada: `api.open-meteo.com`, `calendar.google.com` e endereços
+  terminados em `.blackboard.com`, sempre por https. Redirecionamento para fora dessa lista não é
+  seguido. O clima é pedido com a cidade fixa: nenhum dado do aparelho vai na consulta.
+- O link de um calendário é um segredo (quem tem o link lê a agenda). Ele fica numa chave à parte
+  do armazenamento, não entra no backup em texto, não volta para a tela (a lista mostra só o
+  host) e o app não o escreve no console. No APK de depuração (`-Tipo debug`), o próprio
+  Capacitor registra no log do aparelho cada chamada a plugin, com o endereço e a resposta; no
+  APK normal, não.
 - Todo dado lido do armazenamento passa por migração e validação antes de chegar à interface.
   O que dá para aproveitar é corrigido, o resto é descartado, e uma cópia do conteúdo original
   fica guardada quando há correção.
@@ -182,9 +202,10 @@ tools/                  servidor de desenvolvimento e portão de commits
   `innerHTML` e a página exige Trusted Types.
 - Permissões do app Android: notificações (a única que o Android pergunta, para os lembretes das
   tarefas), vibrar (resposta ao toque), iniciar com o aparelho e manter o processador acordado
-  (o plugin reagenda os lembretes depois de reiniciar) e internet (vem da casca do Capacitor; a
-  página não faz conexões). Os lembretes são agendados no próprio aparelho, sem servidor, e como
-  alarmes não exatos: podem atrasar alguns minutos, e a permissão de alarme exato é retirada.
+  (o plugin reagenda os lembretes depois de reiniciar) e internet (vem da casca do Capacitor; é
+  usada só pela agenda e pelo clima, como descrito acima). Os lembretes são agendados no próprio
+  aparelho, sem servidor, e como alarmes não exatos: podem atrasar alguns minutos, e a permissão
+  de alarme exato é retirada.
 
 ## Próximos passos
 

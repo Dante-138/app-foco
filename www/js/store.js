@@ -7,12 +7,18 @@
 import { uid } from './nucleo/ids.js';
 import { hoje } from './nucleo/datas.js';
 import { PROBLEMA, lerEstado } from './nucleo/estado.js';
+import { lerRedeSalva } from './nucleo/rede.js';
 
 export const CHAVE = 'foco:v1';
 
 // Guarda o último conteúdo salvo que estava ilegível ou precisou de correção,
 // antes que o próximo salvar() grave por cima.
 const CHAVE_COPIA = `${CHAVE}:copia`;
+
+// Agenda e clima: os links dos calendários, o interruptor do clima e o cache (formato em
+// nucleo/rede.js). Chave própria, fora do estado versionado e, por isso, fora do backup em
+// texto: o link secreto de um calendário nunca sai do aparelho.
+const CHAVE_REDE = `${CHAVE}:rede`;
 
 function carregar() {
   let bruto = null;
@@ -82,4 +88,24 @@ export function marcasDeHoje() {
     estado.marcasRotina = { data: hoje(), porRotina: {} };
   }
   return estado.marcasRotina.porRotina;
+}
+
+// O que está guardado da agenda e do clima, já conferido pelo saneador do núcleo.
+export function lerRede() {
+  let bruto = null;
+  try {
+    bruto = localStorage.getItem(CHAVE_REDE);
+  } catch {
+    /* armazenamento indisponível: começa sem calendários e sem cache */
+  }
+  return lerRedeSalva(bruto);
+}
+
+export function gravarRede(valor) {
+  try {
+    localStorage.setItem(CHAVE_REDE, JSON.stringify(valor));
+  } catch {
+    // Sem espaço para gravar: o que mudou vale só até o app fechar.
+    console.warn('Agenda e clima: não foi possível guardar');
+  }
 }

@@ -1440,6 +1440,26 @@ li.mudando-de-area.saindo {
   letter-spacing: -0.02em;
 }
 
+/* Agenda: a hora (ou "dia inteiro") numa coluna; ao lado, o título e o nome do calendário. */
+.painel-evento {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.painel-evento .hora {
+  min-width: 84px;
+}
+
+.painel-evento div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------------- folhas */
 
 dialog.folha {

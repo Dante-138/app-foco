@@ -12,6 +12,7 @@ import { painel } from './painel.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
 import { agendarSincronia } from './lembretes.js';
+import { atualizarAgendaEClima } from './agenda.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
@@ -177,6 +178,7 @@ function iniciar() {
     if (document.hidden) return;
     conferirDia();
     agendarSincronia(); // lembrete que já passou sai do plano
+    atualizarAgendaEClima(); // voltou para o app: lê de novo o que venceu
   });
   setInterval(conferirDia, 60_000);
 
@@ -193,6 +195,9 @@ function iniciar() {
   // Lembretes: o que está agendado no sistema acompanha os dados salvos.
   window.addEventListener('foco:salvo', agendarSincronia);
   agendarSincronia();
+
+  // Agenda e clima: ao abrir, lê de novo o que venceu. Sem nada ligado em Ajustes, não pede nada.
+  atualizarAgendaEClima();
 
   conferirRotinaDoDia();
   desenhar();
