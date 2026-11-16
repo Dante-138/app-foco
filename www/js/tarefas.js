@@ -18,6 +18,7 @@ import {
   confirmar,
   campo,
   estadoVazio,
+  linhaCampo,
   redesenhar,
   vibrar,
 } from './ui.js';
@@ -112,7 +113,7 @@ function camposDeRepeticao(tarefa) {
     max: MAXIMO_DE_INTERVALOS,
     value: String(tarefa?.repeticao?.cada ?? 1),
   });
-  const campoCada = campo('A cada', cada);
+  const campoCada = linhaCampo('A cada', cada);
   const mostrarCada = () => {
     campoCada.hidden = !unidade.value;
   };
@@ -120,7 +121,7 @@ function camposDeRepeticao(tarefa) {
   mostrarCada();
 
   return {
-    campoUnidade: campo('Repetir', unidade),
+    campoUnidade: linhaCampo('Repetir', unidade),
     campoCada,
     limpar() {
       unidade.value = '';
@@ -141,7 +142,8 @@ function editarTarefa(tarefa) {
   const listaPadrao = tarefa?.listaId ?? (naEstrela ? estado.listas[0].id : estado.listaAtiva);
 
   const titulo = h('input', {
-    class: 'entrada',
+    class: 'campo-grande',
+    'aria-label': 'Título',
     type: 'text',
     value: tarefa?.titulo ?? '',
     placeholder: 'Nova tarefa',
@@ -150,7 +152,8 @@ function editarTarefa(tarefa) {
     autocomplete: 'off',
   });
   const notas = h('textarea', {
-    class: 'entrada',
+    class: 'campo-nota',
+    'aria-label': 'Detalhes',
     rows: 2,
     value: tarefa?.notas ?? '',
     placeholder: 'Detalhes (opcional)',
@@ -236,48 +239,73 @@ function editarTarefa(tarefa) {
     redesenhar();
   };
 
-  const fechar = abrirFolha({
-    titulo: tarefa ? 'Editar tarefa' : 'Nova tarefa',
-    corpo: h(
-      'form',
-      { class: 'folha-form', onsubmit: aoSalvar },
-      campo('Título', titulo),
-      campo('Detalhes', notas),
-      h('div', { class: 'dupla' }, campo('Prazo', prazo), campo('Horário', hora)),
-      h(
-        'div',
-        { class: 'atalhos' },
-        atalho('Hoje', hoje()),
-        atalho('Amanhã', somaDias(hoje(), 1)),
-        atalho('Sem data', ''),
-        // Só ao criar: troca esta folha pela da conta mensal, levando o título já digitado.
-        tarefa
-          ? null
-          : h(
-              'button',
-              {
-                type: 'button',
-                class: 'chip fantasma',
-                onclick: () => {
-                  fechar();
-                  novaConta(lista.value || listaPadrao, titulo.value.trim());
-                },
+  // Folha no jeito do iPhone: Cancelar e Salvar na barra do topo, título grande e detalhes
+  // sem moldura, e o resto em grupos de linhas. Abre na metade da tela; sobe ao focar um campo.
+  const formulario = h(
+    'form',
+    { class: 'folha-form', onsubmit: aoSalvar },
+    h('div', { class: 'grupo-campos livre' }, titulo, notas),
+    h('div', { class: 'grupo-campos' }, linhaCampo('Prazo', prazo), linhaCampo('Horário', hora)),
+    h(
+      'div',
+      { class: 'atalhos' },
+      atalho('Hoje', hoje()),
+      atalho('Amanhã', somaDias(hoje(), 1)),
+      atalho('Sem data', ''),
+      // Só ao criar: troca esta folha pela da conta mensal, levando o título já digitado.
+      tarefa
+        ? null
+        : h(
+            'button',
+            {
+              type: 'button',
+              class: 'chip fantasma',
+              onclick: () => {
+                fechar();
+                novaConta(lista.value || listaPadrao, titulo.value.trim());
               },
-              'Conta mensal',
-            ),
-      ),
-      h('div', { class: 'dupla' }, repetir.campoUnidade, repetir.campoCada),
-      avisar.elemento,
-      estado.listas.length > 1 ? campo('Lista', lista) : null,
+            },
+            'Conta mensal',
+          ),
+    ),
+    h(
+      'div',
+      { class: 'grupo-campos' },
+      repetir.campoUnidade,
+      repetir.campoCada,
+      estado.listas.length > 1 ? linhaCampo('Lista', lista) : null,
+    ),
+    avisar.elemento,
+    tarefa
+      ? h(
+          'div',
+          { class: 'grupo-campos' },
+          h('button', { type: 'button', class: 'linha-acao perigo', onclick: excluir }, 'Excluir'),
+        )
+      : null,
+  );
+  // Enter no título salva, como o botão "Ir" do teclado.
+  titulo.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      formulario.requestSubmit();
+    }
+  });
+
+  const fechar = abrirFolha({
+    alturas: true,
+    cabecalho: h(
+      'div',
+      { class: 'folha-barra' },
+      h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
+      h('h2', { class: 'folha-titulo' }, tarefa ? 'Editar tarefa' : 'Nova tarefa'),
       h(
-        'div',
-        { class: 'linha-botoes' },
-        tarefa ? h('button', { type: 'button', class: 'botao perigo', onclick: excluir }, 'Excluir') : null,
-        h('span', { class: 'espaco' }),
-        h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
-        h('button', { type: 'submit', class: 'botao cheio' }, 'Salvar'),
+        'button',
+        { type: 'button', class: 'botao forte', onclick: () => formulario.requestSubmit() },
+        'Salvar',
       ),
     ),
+    corpo: formulario,
   });
 
   if (!tarefa) titulo.focus();
