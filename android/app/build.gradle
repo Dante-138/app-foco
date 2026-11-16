@@ -21,6 +21,11 @@ if (pediuRelease && !arquivoDeAssinatura) {
     throw new GradleException('Build de release exige -Pfoco.assinatura=<arquivo de propriedades da assinatura>')
 }
 
+// Variante de PR: -Pfoco.variante=pr no build de depuração gera um app à parte ("Foco PR",
+// io.github.dante138.foco.pr), que instala ao lado do app de verdade sem tocar nos dados dele.
+// É o APK que o CI anexa a cada pull request, com dados de demonstração.
+def variantePr = providers.gradleProperty('foco.variante').orNull == 'pr'
+
 android {
     namespace = "io.github.dante138.foco"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -54,6 +59,10 @@ android {
             if (arquivoDeAssinatura) {
                 signingConfig signingConfigs.release
             }
+            if (variantePr) {
+                applicationIdSuffix ".pr"
+                versionNameSuffix "-pr"
+            }
         }
         release {
             minifyEnabled false
@@ -63,6 +72,11 @@ android {
             }
         }
     }
+}
+
+// O nome "Foco PR" vem de src/pr/res, que só entra no build da variante de PR.
+if (variantePr) {
+    android.sourceSets.debug.res.srcDirs += 'src/pr/res'
 }
 
 repositories {
