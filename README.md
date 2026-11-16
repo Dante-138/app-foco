@@ -27,7 +27,10 @@ rotinas do dia, hábitos e tarefas com prazo.
   às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
   se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
-  tarefas de hoje. Marca item e conclui tarefa ali mesmo.
+  tarefas de hoje. Marca item e conclui tarefa ali mesmo. Em rotina com horários, a lista começa
+  no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em
+  risco (hábitos que vêm de dois dias seguidos ou mais e ainda estão em branco hoje) aparecem
+  num bloco próprio, e dá para marcar ali.
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
   Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
@@ -63,6 +66,7 @@ npm install         # uma vez
 npm run dev         # servidor local em http://localhost:8137
 npm run check       # o portão inteiro: commits, lint, formatação, testes de unidade e de ponta a ponta
 npm run commits     # só as mensagens de commit do branch, contra a origin/main
+npm run test:mutation  # teste de mutação do núcleo (uns 3 minutos; roda sozinho no CI)
 npm run format      # formata o código com o Prettier
 ```
 
