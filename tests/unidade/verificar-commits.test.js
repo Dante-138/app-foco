@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { problemasDaMensagem, problemasDoAssunto } from '../../tools/verificar-commits.mjs';
+import { lerTermos, problemasDaMensagem, problemasDoAssunto } from '../../tools/verificar-commits.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../../tools/verificar-commits.mjs', import.meta.url));
 
@@ -43,21 +43,29 @@ function repositorioDeTeste(t) {
   };
 }
 
+// Ambiente do script nos testes: sem a lista de termos da máquina nem a do CI, a não ser que o
+// teste passe uma.
+const SEM_TERMOS = {
+  TERMOS_PROIBIDOS: '',
+  ARQUIVO_TERMOS_PROIBIDOS: join(tmpdir(), 'foco-sem-termos', 'nao-existe.txt'),
+  GITHUB_ACTIONS: '',
+};
+
 // Roda o script pela linha de comando, como o gancho e o CI fazem. Sem o título de PR do ambiente.
-function rodar(pasta, ...argumentos) {
+function rodar(pasta, argumentos, ambiente = {}) {
   const { status, stdout, stderr } = spawnSync(process.execPath, [SCRIPT, ...argumentos], {
     cwd: pasta,
     encoding: 'utf8',
-    env: { ...process.env, TITULO_PR: '', CORPO_PR: '' },
+    env: { ...process.env, TITULO_PR: '', CORPO_PR: '', ...SEM_TERMOS, ...ambiente },
   });
   return { status, stdout, stderr };
 }
 
 // Modo --pr: não precisa de repositório, só do título e da descrição no ambiente.
-function rodarPr(titulo, corpo = '') {
+function rodarPr(titulo, corpo = '', ambiente = {}) {
   const { status, stdout, stderr } = spawnSync(process.execPath, [SCRIPT, '--pr'], {
     encoding: 'utf8',
-    env: { ...process.env, TITULO_PR: titulo, CORPO_PR: corpo },
+    env: { ...process.env, TITULO_PR: titulo, CORPO_PR: corpo, ...SEM_TERMOS, ...ambiente },
   });
   return { status, stdout, stderr };
 }
@@ -115,12 +123,12 @@ test('corpo comum não é reprovado', () => {
 test('confere de <base> até a <ponta> informada, e não até o HEAD', (t) => {
   const { pasta, base, bom } = repositorioDeTeste(t);
 
-  const ateOBom = rodar(pasta, base, bom);
+  const ateOBom = rodar(pasta, [base, bom]);
   assert.equal(ateOBom.status, 0, ateOBom.stderr);
   assert.match(ateOBom.stdout, /^1 mensagem\(ns\) conferida\(s\), 0 reprovada\(s\)\.$/m);
 
   // Sem a ponta vale o HEAD, que é o commit fora do padrão.
-  const ateOHead = rodar(pasta, base);
+  const ateOHead = rodar(pasta, [base]);
   assert.equal(ateOHead.status, 1);
   assert.match(ateOHead.stderr, /^REPROVADO {2}\w+ Add stuff without a type$/m);
   assert.match(ateOHead.stdout, /^2 mensagem\(ns\) conferida\(s\), 1 reprovada\(s\)\.$/m);
@@ -129,7 +137,7 @@ test('confere de <base> até a <ponta> informada, e não até o HEAD', (t) => {
 test('base que não existe: saída 2 e mensagem que diz o que fazer', (t) => {
   const { pasta } = repositorioDeTeste(t);
 
-  const { status, stdout, stderr } = rodar(pasta, 'origin/nao-existe');
+  const { status, stdout, stderr } = rodar(pasta, ['origin/nao-existe']);
   assert.equal(status, 2);
   assert.equal(
     stderr.trim(),
@@ -141,7 +149,7 @@ test('base que não existe: saída 2 e mensagem que diz o que fazer', (t) => {
 test('sem argumento: saída 2 e a linha de uso', (t) => {
   const { pasta } = repositorioDeTeste(t);
 
-  const { status, stderr } = rodar(pasta);
+  const { status, stderr } = rodar(pasta, []);
   assert.equal(status, 2);
   assert.match(stderr, /^Uso: node tools\/verificar-commits\.mjs <base> \[<ponta>\]/);
 });
@@ -203,15 +211,96 @@ test('Dependabot pela linha de comando: o autor vem do git, commit por commit', 
 
   // O robô com a assinatura dele passa.
   const doRobo = commit(comCorpo('Bumps eslint.', '', ASSINATURA_DO_ROBO), ROBO);
-  assert.equal(rodar(pasta, ruim, doRobo).status, 0);
+  assert.equal(rodar(pasta, [ruim, doRobo]).status, 0);
 
   // Uma pessoa com a mesma linha reprova.
   const dePessoa = commit(comCorpo(ASSINATURA_DO_ROBO));
-  const pessoa = rodar(pasta, doRobo, dePessoa);
+  const pessoa = rodar(pasta, [doRobo, dePessoa]);
   assert.equal(pessoa.status, 1);
   assert.match(pessoa.stderr, /coautoria/);
 
   // O robô com coautoria reprova.
   const comCoautoria = commit(comCorpo(ASSINATURA_DO_ROBO, 'Co-authored-by: Alguém <a@b.c>'), ROBO);
-  assert.equal(rodar(pasta, dePessoa, comCoautoria).status, 1);
+  assert.equal(rodar(pasta, [dePessoa, comCoautoria]).status, 1);
+});
+
+// ------------------------------------------------- termos proibidos (regra 4)
+
+test('termos: um por linha ou por vírgula, com comentário e linha em branco', () => {
+  assert.deepEqual(lerTermos('Ana Exemplo\n# comentário\n\nBeto, Caio # fim\n'), [
+    'Ana Exemplo',
+    'Beto',
+    'Caio',
+  ]);
+  assert.deepEqual(lerTermos(''), []);
+});
+
+test('termos: reprova sem diferenciar maiúscula nem acento, só a palavra inteira', () => {
+  const termos = ['Zélia', 'rua das flores'];
+  assert.deepEqual(problemasDaMensagem('feat: add tabs\n\nPedido da ZELIA.', '', termos), [
+    'contém o termo proibido nº 1 da lista',
+  ]);
+  assert.deepEqual(problemasDaMensagem('feat: add tabs\n\nMora na Rua das Flores, 10.', '', termos), [
+    'contém o termo proibido nº 2 da lista',
+  ]);
+  // Pedaço de outra palavra não conta.
+  assert.deepEqual(problemasDaMensagem('feat: add tabs\n\nzelial e azélia', '', termos), []);
+  // Sem lista, nada muda.
+  assert.deepEqual(problemasDaMensagem('feat: add tabs\n\nZélia'), []);
+});
+
+// Termo de várias palavras: qualquer separador entre elas reprova. Um teste por forma.
+const TERMO_COMPOSTO = ['Fulano Silva'];
+const FORMAS_DO_TERMO = {
+  'espaço duplo': 'Fulano  Silva',
+  'quebra de linha': 'Fulano\nSilva',
+  sublinhado: 'fulano_silva',
+  hífen: 'fulano-silva',
+  ponto: 'fulano.silva',
+  'tabulação e acento': 'FULANO\tSílva',
+};
+for (const [forma, trecho] of Object.entries(FORMAS_DO_TERMO)) {
+  test(`termos de várias palavras, separados por ${forma}: reprova`, () => {
+    assert.deepEqual(problemasDaMensagem(`docs: add notes\n\nTexto de ${trecho}.`, '', TERMO_COMPOSTO), [
+      'contém o termo proibido nº 1 da lista',
+    ]);
+  });
+}
+
+test('termos de várias palavras: juntas são outra palavra, e termo só com símbolos não reprova', () => {
+  assert.deepEqual(problemasDaMensagem('docs: add notes\n\nfulanosilva', '', TERMO_COMPOSTO), []);
+  assert.deepEqual(problemasDaMensagem('docs: add notes\n\n- - -', '', ['- -']), []);
+});
+
+test('termos pela linha de comando: do ambiente e do arquivo, o aviso só com o número', (t) => {
+  const pasta = mkdtempSync(join(tmpdir(), 'foco-termos-'));
+  t.after(() => rmSync(pasta, { recursive: true, force: true, maxRetries: 3 }));
+  const arquivo = join(pasta, 'termos.txt');
+  writeFileSync(arquivo, 'Beto\n');
+
+  const doAmbiente = rodarPr('feat: add tabs', 'Pedido da Zélia.', { TERMOS_PROIBIDOS: 'outro\nzelia' });
+  assert.equal(doAmbiente.status, 1);
+  assert.match(doAmbiente.stderr, /contém o termo proibido nº 2 da lista/);
+  assert.doesNotMatch(doAmbiente.stderr + doAmbiente.stdout, /z[eé]lia/i);
+
+  const doArquivo = rodarPr('feat: add tabs', 'Pedido do Beto.', { ARQUIVO_TERMOS_PROIBIDOS: arquivo });
+  assert.equal(doArquivo.status, 1);
+  assert.match(doArquivo.stderr, /termo proibido nº 1/);
+
+  // No GitHub Actions, cada termo vai para a máscara do log.
+  const noCi = rodarPr('feat: add tabs', '', { TERMOS_PROIBIDOS: 'Zélia', GITHUB_ACTIONS: 'true' });
+  assert.equal(noCi.status, 0);
+  assert.match(noCi.stdout, /^::add-mask::Zélia$/m);
+});
+
+test('termos pela linha de comando: confere os commits e o título do PR', (t) => {
+  const { pasta, commit, ruim } = repositorioDeTeste(t);
+  const comTermo = commit('docs: thank Zelia for the idea');
+  const termos = { TERMOS_PROIBIDOS: 'Zélia' };
+  assert.equal(rodar(pasta, [ruim, comTermo], termos).status, 1);
+  assert.equal(rodar(pasta, [ruim, comTermo]).status, 0);
+
+  const titulo = rodar(pasta, [comTermo], { ...termos, TITULO_PR: 'docs: thank zelia' });
+  assert.equal(titulo.status, 1);
+  assert.match(titulo.stderr, /termo proibido nº 1/);
 });
