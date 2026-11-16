@@ -39,6 +39,16 @@ export function dataValida(valor) {
   return typeof valor === 'string' && FORMATO_ISO.test(valor) && isoLocal(deIso(valor)) === valor;
 }
 
+// Dias da semana, como em Date.getDay: 0 é domingo.
+export const DIAS_DA_SEMANA = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
+
+// Lista de dias da semana no formato guardado: só inteiros de 0 a 6, sem repetir, em ordem.
+// Qualquer outra coisa (campo ausente, texto, número solto) vira lista vazia.
+export function diasValidos(valor) {
+  if (!Array.isArray(valor)) return [];
+  return DIAS_DA_SEMANA.filter((d) => valor.includes(d));
+}
+
 // Aceita só horários de 00:00 a 23:59, com dois dígitos em cada parte.
 export function horaValida(valor) {
   return typeof valor === 'string' && FORMATO_HORA.test(valor);
