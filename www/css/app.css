@@ -344,6 +344,12 @@ ul {
   inset: min(0px, calc((100% - 44px) / 2));
 }
 
+/* O botão de ícone pequeno fica a 6 px do campo ao lado, na edição da rotina: a camada cresce
+   os 4 px só para cima e para baixo, e 3 px para os lados, para não cobrir o campo vizinho. */
+.botao-icone.pequeno::after {
+  inset: -4px -3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --aperto-solta: 0ms;
