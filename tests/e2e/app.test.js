@@ -1832,6 +1832,107 @@ test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; 
   assert.deepEqual(erros, []);
 });
 
+test('prazos: conta mensal com aviso antecipado, contagem regressiva e atrasada sem mudar de data', async (t) => {
+  // O relógio começa no sábado, 14/11/2026, às 10:00. A tarefa atrasada venceu na terça, dia 10.
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Casa' }],
+    tarefas: [
+      { id: 'velha', listaId: 'l', titulo: 'Devolver o livro', prazo: '2026-11-10', criadaEm: 1 },
+      { id: 'longe', listaId: 'l', titulo: 'Renovar a matrícula', prazo: '2026-11-26', criadaEm: 2 },
+    ],
+  });
+  const lembretes = comLembretes('granted');
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: new Date('2026-11-14T10:00:00-03:00') });
+      await lembretes(contexto);
+    },
+  });
+  const tarefas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  // Espera o sistema ter, para uma tarefa, exatamente estes momentos agendados (relógio local).
+  // O app agenda um instante depois de salvar, então conferir na hora pegaria o plano antigo.
+  const agendados = (titulo, esperado) =>
+    pagina.waitForFunction(
+      ([nome, momentos]) => {
+        const p = (v) => String(v).padStart(2, '0');
+        const dela = window.sistemaDeLembretes.pendentes
+          .filter((x) => x.title === nome)
+          .map((x) => new Date(x.schedule.at))
+          .map((d) => `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`)
+          .sort();
+        return dela.join() === momentos.join();
+      },
+      [titulo, esperado],
+      ESPERA,
+    );
+  const linha = (titulo) => pagina.locator('.tarefa', { hasText: titulo });
+
+  // Contagem regressiva na pendente; a atrasada fica em vermelho, com a data dela e há quanto venceu.
+  await visivel(linha('Renovar a matrícula').getByText('em 12 dias'));
+  const atrasada = linha('Devolver o livro').locator('.tarefa-sub.atrasada');
+  assert.match(await atrasada.textContent(), /10 de nov.*venceu há 4 dias/);
+  assert.equal((await tarefas()).find((x) => x.id === 'velha').prazo, '2026-11-10');
+
+  // Conta mensal pelo atalho da tarefa nova: o título digitado vai junto.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Luz');
+  await botao(pagina, 'Conta mensal').click();
+  await visivel(pagina.getByRole('heading', { name: 'Nova conta mensal' }));
+  assert.equal(await pagina.getByLabel('Nome').inputValue(), 'Luz');
+  assert.equal(await pagina.getByLabel('Dia do vencimento').inputValue(), '14'); // o dia de hoje
+  await pagina.getByLabel('Valor (opcional)').fill('cento e vinte');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Nova conta mensal' })); // valor que não é número não passa
+  await pagina.getByLabel('Valor (opcional)').fill('120');
+  await pagina.getByLabel('Dia do vencimento').fill('20');
+  await botao(pagina, 'Salvar').click();
+
+  const titulo = 'Luz - R$ 120,00';
+  await visivel(linha(titulo).getByText('em 6 dias, repete todo mês'));
+  const conta = (await tarefas()).find((x) => x.titulo === titulo);
+  assert.deepEqual(
+    [conta.prazo, conta.repeticao, conta.avisos, conta.listaId],
+    ['2026-11-20', { cada: 1, unidade: 'mes' }, [1, 3], 'l'],
+  );
+  // Avisa 3 dias antes, 1 dia antes, no dia e, se ficar pendente, na manhã seguinte.
+  await agendados(titulo, ['17/11 09:00', '19/11 09:00', '20/11 09:00', '21/11 09:00']);
+
+  // Pagar a conta: a do mês seguinte já fica alocada, com os mesmos avisos.
+  await pagina.getByRole('checkbox', { name: `Concluir: ${titulo}` }).click();
+  await agendados(titulo, ['17/12 09:00', '19/12 09:00', '20/12 09:00', '21/12 09:00']);
+  const proxima = (await tarefas()).find((x) => x.titulo === titulo && !x.feita);
+  assert.deepEqual([proxima.prazo, proxima.avisos], ['2026-12-20', [1, 3]]);
+
+  // Aviso antecipado em qualquer tarefa, pelo formulário; "Sem data" tira os avisos.
+  await linha('Renovar a matrícula').locator('.tarefa-corpo').click();
+  await botao(pagina, 'Avisar 7 dias antes').click();
+  await botao(pagina, 'Avisar 1 dia antes').click();
+  assert.equal(await botao(pagina, 'Avisar 7 dias antes').getAttribute('aria-pressed'), 'true');
+  await botao(pagina, 'Salvar').click();
+  await agendados('Renovar a matrícula', ['19/11 09:00', '25/11 09:00', '26/11 09:00', '27/11 09:00']);
+  assert.deepEqual((await tarefas()).find((x) => x.id === 'longe').avisos, [1, 7]);
+
+  await linha('Renovar a matrícula').locator('.tarefa-corpo').click();
+  await botao(pagina, 'Sem data').click();
+  assert.equal(await botao(pagina, 'Avisar 7 dias antes').getAttribute('aria-pressed'), 'false');
+  await botao(pagina, 'Salvar').click();
+  await agendados('Renovar a matrícula', []);
+  const semData = (await tarefas()).find((x) => x.id === 'longe');
+  assert.deepEqual([semData.prazo, semData.avisos], [null, []]);
+
+  // A conta também nasce pelo menu da lista.
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Nova conta mensal').click();
+  await pagina.getByLabel('Nome').fill('Internet');
+  await pagina.getByLabel('Dia do vencimento').fill('5');
+  await botao(pagina, 'Salvar').click();
+  await visivel(linha('Internet').getByText('em 21 dias, repete todo mês')); // 05/12, sem valor no título
+  assert.deepEqual(erros, []);
+});
+
 test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo', async (t) => {
   const salvo = JSON.stringify({
     versao: 4,
