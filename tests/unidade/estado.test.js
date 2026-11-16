@@ -28,6 +28,7 @@ test('estado inicial tem uma lista, nenhuma rotina e a data de hoje nas marcas',
     tarefas: [],
     ordemTarefas: 'data',
     lembretes: true,
+    avisosDoDia: { manha: true, noite: true, rotina: false, habitos: true },
   });
 });
 

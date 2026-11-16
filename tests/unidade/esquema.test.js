@@ -45,6 +45,7 @@ function valido() {
         meta: null,
         arquivado: false,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: '21:30',
       },
       {
         id: 'h2',
@@ -55,6 +56,7 @@ function valido() {
         meta: 2,
         arquivado: true,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: null,
       },
     ],
     registros: { h1: { '2026-11-12': 'feito', '2026-11-11': 'pulado' }, h2: { '2026-11-12': 1.5 } },
@@ -102,6 +104,7 @@ function valido() {
     ],
     ordemTarefas: 'titulo',
     lembretes: false,
+    avisosDoDia: { manha: true, noite: false, rotina: true, habitos: false },
   };
 }
 
@@ -139,6 +142,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     tarefas: [],
     ordemTarefas: 'data',
     lembretes: true,
+    avisosDoDia: { manha: true, noite: true, rotina: false, habitos: true },
   });
   assert.deepEqual(avisos, []);
 });
@@ -324,6 +328,7 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       meta: null,
       arquivado: false,
       diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+      lembrete: null,
     },
     {
       id: 'b',
@@ -334,6 +339,7 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       meta: null,
       arquivado: false,
       diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+      lembrete: null,
     },
   ]);
 });
@@ -371,6 +377,34 @@ test('pausas: ficam as primeiras até o limite', () => {
   const { estado } = limpar({ pausas: muitas });
   assert.equal(estado.pausas.length, 60);
   assert.equal(estado.pausas.at(-1).id, 'p59');
+});
+
+test('lembrete do hábito: só hora válida; o resto vira null', () => {
+  const { estado, avisos } = limpar({
+    habitos: [
+      { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', lembrete: '07:05' },
+      { id: 'b', nome: 'B', cor: 'rosa', tipo: 'simnao', lembrete: '24:00' },
+      { id: 'c', nome: 'C', cor: 'rosa', tipo: 'simnao', lembrete: '7:5' },
+      { id: 'd', nome: 'D', cor: 'rosa', tipo: 'simnao', lembrete: 730 },
+      { id: 'e', nome: 'E', cor: 'rosa', tipo: 'simnao' },
+    ],
+  });
+  assert.deepEqual(
+    estado.habitos.map((x) => x.lembrete),
+    ['07:05', null, null, null, null],
+  );
+  assert.deepEqual(avisos, []);
+});
+
+test('avisos do dia: a rotina no relógio nasce desligada, os outros ligados; campo estranho sai', () => {
+  const padrao = { manha: true, noite: true, rotina: false, habitos: true };
+  assert.deepEqual(limpar({}).estado.avisosDoDia, padrao);
+  assert.deepEqual(limpar({ avisosDoDia: 'sim' }).estado.avisosDoDia, padrao);
+  assert.deepEqual(limpar({ avisosDoDia: { noite: false, rotina: null, extra: 1 } }).estado.avisosDoDia, {
+    ...padrao,
+    noite: false,
+  });
+  assert.deepEqual(limpar({ avisosDoDia: { rotina: true } }).estado.avisosDoDia, { ...padrao, rotina: true });
 });
 
 test('hábito numérico: unidade cortada ou nula, meta inválida vira 1', () => {

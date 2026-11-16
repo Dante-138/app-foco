@@ -16,7 +16,8 @@
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
-//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos) }]
+//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos),
+//                    lembrete: 'HH:MM' | null (hora do aviso do hábito) }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
 //   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
 //   pausas:       [{ id, nome, de: 'AAAA-MM-DD', ate: 'AAAA-MM-DD' }]   (férias e feriados, datas
@@ -32,7 +33,9 @@
 //                    prazo; padrão: nenhum; ver lembretes.js),
 //                    estrela, feita, criadaEm, feitaEm: número | null }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
-//   lembretes:    verdadeiro agenda notificação para as tarefas com prazo (padrão: verdadeiro)
+//   lembretes:    verdadeiro agenda as notificações do app (padrão: verdadeiro); desligado, nada avisa
+//   avisosDoDia:  { manha, noite, rotina, habitos }: quais avisos do dia estão ligados (padrão:
+//                 todos menos a rotina; ver avisos-do-dia.js)
 // }
 //
 // Regra de correção: o que dá para aproveitar é corrigido (texto cortado no
@@ -44,6 +47,7 @@ import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
 import { LIMITE_DE_PAUSAS, emOrdem } from './pausas.js';
+import { avisosDoDiaValidos } from './avisos-do-dia.js';
 import { avisosValidos } from './lembretes.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
@@ -130,6 +134,7 @@ function sanearHabitos(valor, avisos) {
       meta: numerico ? (numeroValido(habito.meta) && habito.meta > 0 ? habito.meta : 1) : null,
       arquivado: habito.arquivado === true,
       diasDaSemana: sanearDiasDaSemana(habito.diasDaSemana),
+      lembrete: horaValida(habito.lembrete) ? habito.lembrete : null,
     };
   });
 }
@@ -276,6 +281,7 @@ export function sanear(dados, { dia, gerarId }) {
     tarefas: sanearTarefas(dados.tarefas, listas, avisos),
     ordemTarefas: ORDENS_TAREFAS.includes(dados.ordemTarefas) ? dados.ordemTarefas : ORDENS_TAREFAS[0],
     lembretes: dados.lembretes !== false,
+    avisosDoDia: avisosDoDiaValidos(dados.avisosDoDia),
   };
   return { estado, avisos };
 }

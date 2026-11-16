@@ -31,6 +31,7 @@ function comDados() {
         meta: null,
         arquivado: true,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: '21:30',
       },
     ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },

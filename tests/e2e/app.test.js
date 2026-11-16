@@ -105,13 +105,26 @@ async function esperarTema(pagina, esperado) {
 
 // Põe no lugar do plugin de notificações do Android um sistema de mentira, que guarda o
 // que o app agenda e cancela em window.sistemaDeLembretes. "permissao" é a resposta inicial.
+// window.acoesDeLembretes guarda os tipos de notificação com botão que o app registrou e
+// tocar(notificacao, actionId), que faz o papel da pessoa tocando numa notificação.
 const comLembretes = (permissao) => (contexto) =>
   contexto.addInitScript((inicial) => {
     const sistema = { permissao: inicial, pedidos: 0, pendentes: [] };
     window.sistemaDeLembretes = sistema;
+    const acoes = { tipos: [], ouvinte: null };
+    acoes.tocar = (notification, actionId = 'tap') => acoes.ouvinte({ actionId, notification });
+    window.acoesDeLembretes = acoes;
     window.Capacitor = {
       Plugins: {
         LocalNotifications: {
+          registerActionTypes: ({ types }) => {
+            acoes.tipos = types;
+            return Promise.resolve();
+          },
+          addListener: (_evento, ouvinte) => {
+            acoes.ouvinte = ouvinte;
+            return Promise.resolve({ remove: () => Promise.resolve() });
+          },
           checkPermissions: () => Promise.resolve({ display: sistema.permissao }),
           requestPermissions: () => {
             sistema.pedidos += 1;
@@ -1859,7 +1872,12 @@ test('painel: o item do horário atual, quanto falta para o próximo e as sequê
 test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {
   const { pagina, erros } = await abrir(t, { preparar: comLembretes('prompt') });
   const pendentes = (n) =>
-    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+    pagina.waitForFunction(
+      (esperado) =>
+        window.sistemaDeLembretes.pendentes.filter((x) => x.extra.tipo === 'tarefa').length === esperado,
+      n,
+      ESPERA,
+    );
 
   await botao(pagina, 'Tarefas').click();
   await botao(pagina, 'Nova tarefa').click();
@@ -1871,7 +1889,7 @@ test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; 
 
   const sistema = await pagina.evaluate(() => window.sistemaDeLembretes);
   assert.equal(sistema.pedidos, 1);
-  const [aviso] = sistema.pendentes;
+  const [aviso] = sistema.pendentes.filter((x) => x.extra.tipo === 'tarefa');
   assert.equal(aviso.title, 'Reunião');
   assert.equal(aviso.body, 'Minhas tarefas');
   assert.equal(aviso.isExactNotification, false); // nunca abre a tela de "Alarmes e lembretes"
@@ -2020,10 +2038,17 @@ test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo',
   });
   const { pagina, erros } = await abrir(t, { salvo, preparar: comLembretes('granted') });
   const pendentes = (n) =>
-    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+    pagina.waitForFunction(
+      (esperado) =>
+        window.sistemaDeLembretes.pendentes.filter((x) => x.extra.tipo === 'tarefa').length === esperado,
+      n,
+      ESPERA,
+    );
 
   await pendentes(1);
-  const [aviso] = await pagina.evaluate(() => window.sistemaDeLembretes.pendentes);
+  const [aviso] = await pagina.evaluate(() =>
+    window.sistemaDeLembretes.pendentes.filter((x) => x.extra.tipo === 'tarefa'),
+  );
   assert.equal(aviso.body, 'Faculdade · Levar o certificado');
   assert.deepEqual(
     await pagina.evaluate((iso) => [new Date(iso).getHours(), new Date(iso).getMinutes()], aviso.schedule.at),
@@ -2035,12 +2060,75 @@ test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo',
   await pagina.getByRole('switch', { name: 'Lembretes ligados' }).click();
   await visivel(pagina.getByRole('switch', { name: 'Lembretes desligados' }));
   await visivel(pagina.getByText('Nenhuma tarefa avisa.'));
-  await pendentes(0);
+  // Desligado, nada avisa: nem as tarefas, nem os avisos do dia.
+  await pagina.waitForFunction(() => window.sistemaDeLembretes.pendentes.length === 0, null, ESPERA);
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).lembretes, false);
 
   // Ligar de novo agenda outra vez.
   await pagina.getByRole('switch', { name: 'Lembretes desligados' }).click();
   await pendentes(1);
+  assert.deepEqual(erros, []);
+});
+
+test('lembretes: com 60 tarefas atrasadas, o lembrete que só passou da hora não é cancelado', async (t) => {
+  // O relógio começa no sábado, 14/11/2026, às 10:00. Sessenta tarefas venceram ontem (é o
+  // limite de lembretes agendados) e uma reunião avisa às 10:01.
+  const atrasadas = Array.from({ length: 60 }, (_, i) => ({
+    id: `a${i}`,
+    listaId: 'l',
+    titulo: `Atrasada ${i}`,
+    prazo: '2026-11-13',
+    criadaEm: i + 1,
+  }));
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Casa' }],
+    tarefas: [
+      ...atrasadas,
+      { id: 'r', listaId: 'l', titulo: 'Reunião', prazo: '2026-11-14', hora: '10:01', criadaEm: 100 },
+    ],
+    avisosDoDia: { manha: false, noite: false, rotina: false, habitos: false },
+  });
+  const lembretes = comLembretes('granted');
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: new Date('2026-11-14T10:00:00-03:00') });
+      await lembretes(contexto);
+    },
+  });
+  const agendado = (titulo) =>
+    pagina.waitForFunction(
+      (nome) => window.sistemaDeLembretes.pendentes.some((x) => x.title === nome),
+      titulo,
+      ESPERA,
+    );
+  const titulos = () => pagina.evaluate(() => window.sistemaDeLembretes.pendentes.map((x) => x.title));
+
+  await agendado('Reunião');
+  assert.deepEqual(await titulos(), ['Reunião']); // as atrasadas já passaram da hora: não agendam
+
+  // Passa das 10:01: a notificação da reunião foi entregue e está na tela do celular.
+  await pagina.clock.fastForward('00:02:00');
+
+  // Qualquer gravação refaz o plano. A reunião continua pendente, então o aviso dela fica:
+  // sumir da tela só quando a tarefa for concluída.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Comprar pão');
+  await botao(pagina, 'Amanhã').click();
+  await botao(pagina, 'Salvar').click();
+  await agendado('Comprar pão');
+  assert.deepEqual((await titulos()).sort(), ['Comprar pão', 'Reunião']);
+
+  // Concluir a reunião cancela o aviso dela.
+  await pagina.getByRole('checkbox', { name: 'Concluir: Reunião' }).click();
+  await pagina.waitForFunction(
+    () => !window.sistemaDeLembretes.pendentes.some((x) => x.title === 'Reunião'),
+    null,
+    ESPERA,
+  );
+  assert.deepEqual(await titulos(), ['Comprar pão']);
   assert.deepEqual(erros, []);
 });
 
@@ -2064,6 +2152,206 @@ test('lembretes: com a notificação bloqueada nada é agendado nem pedido; no n
   await botao(semPlugin.pagina, 'Ajustes').click();
   await visivel(semPlugin.pagina.getByText('Os lembretes das tarefas funcionam no app Android.'));
   assert.deepEqual([...bloqueado.erros, ...semPlugin.erros], []);
+});
+
+test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito com o botão Feito', async (t) => {
+  // O relógio começa no sábado, 14/11/2026, às 06:00.
+  const item = (id, texto, hora, habitoId = null) => ({ id, tipo: 'item', texto, hora, habitoId });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'habitos',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('i1', 'Levantar', '06:30'),
+          item('i2', 'Ler um capítulo', '07:15', 'ler'),
+          item('i3', 'Bater o ponto', '09:00'),
+        ],
+      },
+      // Rotina do domingo (o dia seguinte ao do relógio): os avisos de amanhã vêm dela.
+      { id: 'd', nome: 'Domingo', diasDaSemana: [0], itens: [item('j1', 'Passear', '10:00')] },
+    ],
+    habitos: [
+      { id: 'ler', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'alongar', nome: 'Alongar', cor: 'verde', tipo: 'simnao' },
+      { id: 'meditar', nome: 'Meditar', cor: 'lilas', tipo: 'simnao', arquivado: true },
+    ],
+    registros: { meditar: { '2026-11-14': 'pulado' } }, // folga marcada à mão; arquivado, fora das contas
+  });
+  const lembretes = comLembretes('granted');
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: async (contexto) => {
+      await contexto.clock.install({ time: new Date('2026-11-14T06:00:00-03:00') });
+      await lembretes(contexto);
+    },
+  });
+  // Espera o sistema ter esta quantidade de avisos de cada tipo e devolve os de um tipo, em ordem.
+  const avisos = async (tipo, quantos) => {
+    const resultado = await pagina.waitForFunction(
+      ([qual, n]) => {
+        const deles = window.sistemaDeLembretes.pendentes
+          .filter((x) => x.extra.tipo === qual)
+          .sort((a, b) => a.schedule.at.localeCompare(b.schedule.at));
+        return deles.length === n ? deles : null;
+      },
+      [tipo, quantos],
+      ESPERA,
+    );
+    return resultado.jsonValue();
+  };
+  const corpoDe = async (tipo, quantos, corpo) => {
+    await pagina.waitForFunction(
+      ([qual, texto]) =>
+        window.sistemaDeLembretes.pendentes.some((x) => x.extra.tipo === qual && x.body === texto),
+      [tipo, corpo],
+      ESPERA,
+    );
+    return avisos(tipo, quantos);
+  };
+  const tocar = (notificacao, acao) =>
+    pagina.evaluate(([n, a]) => window.acoesDeLembretes.tocar(n, a), [notificacao, acao]);
+  const horaLocal = (aviso) =>
+    pagina.evaluate((iso) => {
+      const d = new Date(iso);
+      return `${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }, aviso.schedule.at);
+
+  // Ao abrir: sete resumos e sete revisões. A rotina no relógio nasce desligada.
+  const [manha] = await avisos('manha', 7);
+  assert.deepEqual([manha.title, manha.body], ['Hoje, sáb., 14 de nov.', 'Rotina Manhã · 2 hábitos']);
+  assert.equal(await horaLocal(manha), '14 07:00');
+  const [noite] = await avisos('noite', 7);
+  assert.deepEqual([noite.title, noite.body], ['Revisão do dia', 'Faltam: 2 hábitos e 3 itens da rotina.']);
+  assert.equal(await horaLocal(noite), '14 22:00');
+  await avisos('rotina', 0);
+
+  // Ligada em Ajustes, a rotina de hoje e de amanhã passa a avisar no relógio.
+  await botao(pagina, 'Ajustes').click();
+  const rotinaNoRelogio = pagina.getByRole('switch', { name: /Rotina no relógio/ });
+  assert.equal(await rotinaNoRelogio.getAttribute('aria-checked'), 'false');
+  await rotinaNoRelogio.click();
+  assert.equal(await rotinaNoRelogio.getAttribute('aria-checked'), 'true');
+  await botao(pagina, 'Fechar').click();
+  // Três de hoje, da rotina aberta, e um de amanhã, da rotina do domingo.
+  const daRotina = await avisos('rotina', 4);
+  assert.deepEqual([daRotina[3].title, daRotina[3].body], ['Passear', '10:00 · Domingo']);
+  assert.equal(await horaLocal(daRotina[3]), '15 10:00');
+  const resumos = await avisos('manha', 7);
+  assert.equal(resumos[1].body, 'Rotina Domingo · 2 hábitos');
+  assert.deepEqual(
+    daRotina.slice(0, 3).map((x) => [x.title, x.body]),
+    [
+      ['Levantar', '06:30 · Manhã'],
+      ['Ler um capítulo', '07:15 · Manhã'],
+      ['Bater o ponto', '09:00 · Manhã'],
+    ],
+  );
+  assert.equal(daRotina[0].isExactNotification, false);
+  await avisos('habito', 0);
+  assert.deepEqual(await pagina.evaluate(() => window.acoesDeLembretes.tipos), [
+    { id: 'habito-feito', actions: [{ id: 'feito', title: 'Feito' }] },
+  ]);
+
+  // Lembrete num hábito: avisa hoje e amanhã, com o botão "Feito".
+  await botao(pagina, 'Editar Alongar').click();
+  await pagina.getByLabel('Lembrete (opcional)').fill('08:00');
+  await botao(pagina, 'Salvar').click();
+  const [deHoje, deAmanha] = await avisos('habito', 2);
+  assert.deepEqual(
+    [deHoje.title, deHoje.body, deHoje.actionTypeId],
+    ['Alongar', 'Hábito de hoje', 'habito-feito'],
+  );
+  assert.deepEqual([await horaLocal(deHoje), await horaLocal(deAmanha)], ['14 08:00', '15 08:00']);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).habitos[1].lembrete, '08:00');
+
+  // Hábito ligado a item com horário é avisado pela rotina: o lembrete dele não duplica.
+  await botao(pagina, 'Editar Leitura').click();
+  await pagina.getByLabel('Lembrete (opcional)').fill('21:00');
+  await botao(pagina, 'Salvar').click();
+  await pagina.waitForFunction(
+    (chave) => JSON.parse(localStorage.getItem(chave)).habitos[0].lembrete === '21:00',
+    CHAVE,
+    ESPERA,
+  );
+  // Hoje a rotina aberta avisa pela Leitura; amanhã a rotina do domingo não tem esse item, e vale o lembrete dela.
+  const comAmanha = await avisos('habito', 3);
+  assert.deepEqual(
+    comAmanha.map((x) => x.title),
+    ['Alongar', 'Alongar', 'Leitura'],
+  );
+
+  // Tocar em "Feito": o hábito é marcado no dia do aviso, o aviso de hoje sai e a revisão acompanha.
+  await tocar(deHoje, 'feito');
+  await pagina.waitForFunction(
+    (chave) => JSON.parse(localStorage.getItem(chave)).registros.alongar?.['2026-11-14'] === 'feito',
+    CHAVE,
+    ESPERA,
+  );
+  await esperarTitulo(pagina, 'Hábitos - Foco');
+  const [soAmanha] = await avisos('habito', 2);
+  assert.equal(await horaLocal(soAmanha), '15 08:00');
+  await corpoDe('noite', 7, 'Faltam: 1 hábito e 3 itens da rotina.');
+
+  // Tocar de novo no mesmo aviso não muda nada.
+  await tocar(deHoje, 'feito');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.alongar['2026-11-14'], 'feito');
+
+  // O botão "Feito" nunca passa por cima do que já está no dia: a folga marcada antes de a
+  // notificação ser tocada continua folga. Também não marca dia futuro nem hábito que não existe.
+  const feitoEm = (habitoId, dia) => tocar({ extra: { tipo: 'habito', dia, habitoId } }, 'feito');
+  const registros = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).registros;
+  await feitoEm('meditar', '2026-11-14');
+  assert.equal((await registros()).meditar['2026-11-14'], 'pulado');
+  await feitoEm('meditar', '2026-11-15');
+  await feitoEm('nao-existe', '2026-11-14');
+  await feitoEm('meditar', 'amanhã');
+  assert.deepEqual((await registros()).meditar, { '2026-11-14': 'pulado' });
+  // Num dia em branco que já passou, marca: é o aviso de ontem tocado hoje.
+  await feitoEm('meditar', '2026-11-13');
+  await pagina.waitForFunction(
+    (chave) => JSON.parse(localStorage.getItem(chave)).registros.meditar['2026-11-13'] === 'feito',
+    CHAVE,
+    ESPERA,
+  );
+  assert.equal((await registros()).meditar['2026-11-14'], 'pulado');
+
+  // Tocar num aviso da rotina leva ao Painel; marcar o item tira o aviso dele.
+  await tocar(daRotina[0]);
+  await esperarTitulo(pagina, 'Painel - Foco');
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  const restantes = await avisos('rotina', 3);
+  assert.equal(restantes[0].title, 'Ler um capítulo');
+  await corpoDe('noite', 7, 'Faltam: 1 hábito e 2 itens da rotina.');
+
+  // Ajustes: cada aviso do dia tem o seu interruptor. Sem a rotina no relógio, o lembrete da Leitura volta.
+  await botao(pagina, 'Ajustes').click();
+  const interruptor = pagina.getByRole('switch', { name: /Rotina no relógio/ });
+  assert.equal(await interruptor.getAttribute('aria-checked'), 'true');
+  await interruptor.click();
+  assert.equal(await interruptor.getAttribute('aria-checked'), 'false');
+  await avisos('rotina', 0);
+  const comLeitura = await avisos('habito', 3);
+  assert.deepEqual(
+    comLeitura.map((x) => x.title),
+    ['Leitura', 'Alongar', 'Leitura'],
+  );
+  await pagina.getByRole('switch', { name: /Resumo da manhã/ }).click();
+  await avisos('manha', 0);
+  assert.deepEqual(JSON.parse(await lerSalvo(pagina, CHAVE)).avisosDoDia, {
+    manha: false,
+    noite: true,
+    rotina: false,
+    habitos: true,
+  });
+
+  // Desligar os lembretes cancela tudo e esconde os interruptores.
+  await pagina.getByRole('switch', { name: 'Lembretes ligados' }).click();
+  await pagina.waitForFunction(() => window.sistemaDeLembretes.pendentes.length === 0, null, ESPERA);
+  assert.equal(await pagina.getByRole('switch', { name: /Revisão da noite/ }).isVisible(), false);
+  assert.deepEqual(erros, []);
 });
 
 // ---------------------------------------------------------------------- tema
