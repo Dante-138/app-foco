@@ -24,7 +24,8 @@ import {
 import { abrirRotinaDoDia, definirDias, rotinaDoDia } from '../../www/js/nucleo/rotina-do-dia.js';
 
 const DIA = '2026-11-14';
-const OPCOES = { seed: 20261114, numRuns: 500 };
+// O teste de mutação reduz os casos (stryker.config.mjs): ele roda este arquivo uma vez por mutante.
+const OPCOES = { seed: 20261114, numRuns: Number(process.env.FOCO_CASOS_POR_PROPRIEDADE) || 500 };
 const MINIMO_COM_CONTEUDO = 0.1; // parte mínima dos estados gerados que precisa ter cada tipo de dado
 
 function contexto() {

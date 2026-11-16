@@ -33,7 +33,8 @@ jobs:
 
   # Com o merge por squash, o título do PR vira o assunto do commit na main e a descrição vira o
   # corpo. O job Gate confere o título quando chega commit; este confere os dois também quando
-  # são editados depois, que é quando o Gate não roda.
+  # são editados depois, que é quando o Gate não roda. Também passa os commits e o texto do PR
+  # pela lista de termos proibidos: o GitHub guarda os commits de todo PR para sempre.
   titulo:
     name: Título
     runs-on: ubuntu-24.04
@@ -43,11 +44,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # os commits do PR, comparados com a main
           persist-credentials: false
 
+      # TERMOS_PROIBIDOS vem de um secret: a lista de termos não pode ficar pública. Por isso o
+      # verificador que roda aqui é o da main, já revisado, e não o do PR: um PR que mudasse o
+      # script poderia mandar o secret para fora. Mudança no verificador vale neste job depois do
+      # merge; antes disso, os testes de unidade do Gate conferem a versão do PR. Sem o secret
+      # (PR do Dependabot, por exemplo), a lista fica vazia e o resto das regras vale igual.
       # O script não tem dependências: roda com o Node que já vem na máquina do Actions.
-      - name: Título e descrição do PR
+      - name: Título, descrição e commits do PR
         env:
           TITULO_PR: ${{ github.event.pull_request.title }}
           CORPO_PR: ${{ github.event.pull_request.body }}
-        run: node tools/verificar-commits.mjs --pr
+          TERMOS_PROIBIDOS: ${{ secrets.TERMOS_PROIBIDOS }}
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          verificador="$RUNNER_TEMP/verificar-commits.mjs"
+          git show origin/main:tools/verificar-commits.mjs > "$verificador"
+          resultado=0
+          node "$verificador" --pr || resultado=1
+          node "$verificador" "$BASE" || resultado=1
+          exit "$resultado"

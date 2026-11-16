@@ -1,13 +1,16 @@
-// Aba Painel: o dia numa tela só, com pouco texto. Rotina aberta (anel e próximos itens),
-// hábitos e tarefas de hoje. Marca item da rotina e conclui tarefa ali mesmo; o resto
-// leva para a aba de cada coisa. Não guarda nada próprio: lê os mesmos dados das abas.
+// Aba Painel: o dia numa tela só, com pouco texto. Rotina aberta (anel, o item do horário
+// atual e os próximos), hábitos, sequências em risco e tarefas de hoje. Marca item da rotina,
+// hábito e tarefa ali mesmo; o resto leva para a aba de cada coisa. Não guarda nada próprio:
+// lê os mesmos dados das abas.
 
 import { estado, marcasDeHoje } from './store.js';
-import { hoje } from './nucleo/datas.js';
+import { agoraLocal, hoje } from './nucleo/datas.js';
 import { resumoDoDia } from './nucleo/painel.js';
 import { rotuloData } from './nucleo/prazos.js';
+import { emQuanto } from './nucleo/rotina-horario.js';
 import { h, svg, icone, estadoVazio } from './ui.js';
 import { rotinas, alternarItemDaRotina } from './rotinas.js';
+import { marcarHabitoHoje } from './habitos.js';
 import { tarefas, concluirTarefa } from './tarefas.js';
 
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -62,7 +65,23 @@ function blocoDaRotina(rotina, resumo) {
       'div',
       { class: 'painel-topo' },
       anel(fracao, porcento),
-      h('p', { class: 'painel-rotina' }, rotina.nome, h('small', {}, `${resumo.feitos} de ${resumo.total}`)),
+      h(
+        'p',
+        { class: 'painel-rotina' },
+        rotina.nome,
+        h(
+          'small',
+          {},
+          [
+            `${resumo.feitos} de ${resumo.total}`,
+            resumo.atrasados
+              ? `${resumo.atrasados} ${resumo.atrasados === 1 ? 'atrasado' : 'atrasados'}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ),
+      ),
     ),
     resumo.proximos.length
       ? h(
@@ -84,6 +103,11 @@ function blocoDaRotina(rotina, resumo) {
                 h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
                 item.hora ? h('span', { class: 'hora' }, item.hora) : null,
                 h('span', { class: 'rotina-texto' }, item.texto),
+                // Onde o relógio está: o item do horário atual e quanto falta para o próximo.
+                item.id === resumo.agora ? h('small', { class: 'etiqueta' }, 'agora') : null,
+                item.id === resumo.depois?.id
+                  ? h('small', { class: 'painel-falta' }, emQuanto(resumo.depois.faltam))
+                  : null,
               ),
             ),
           ),
@@ -94,6 +118,52 @@ function blocoDaRotina(rotina, resumo) {
       { type: 'button', class: 'botao painel-ver', onclick: () => irPara('rotinas') },
       'Ver rotina completa',
     ),
+  );
+}
+
+// Hábitos que vêm de dias seguidos e ainda estão em branco hoje: se o dia acabar assim, a
+// sequência zera. O círculo marca o hábito ali mesmo (no numérico, abre a quantidade).
+function blocoDasSequencias(resumo) {
+  if (!resumo.total) return null;
+  return h(
+    'section',
+    { class: 'cartao painel-bloco' },
+    h('h3', { class: 'grupo-titulo' }, 'Sequências em risco'),
+    h(
+      'ul',
+      {},
+      resumo.primeiras.map(({ habito, dias }) =>
+        h(
+          'li',
+          { class: 'tarefa' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'tarefa-check',
+              role: 'checkbox',
+              'aria-checked': 'false',
+              'aria-label': `Marcar hoje: ${habito.nome}`,
+              onclick: () => marcarHabitoHoje(habito),
+            },
+            h('span', { class: 'circulo' }),
+          ),
+          h(
+            'button',
+            { type: 'button', class: 'tarefa-corpo', onclick: () => irPara('habitos') },
+            h('span', { class: 'tarefa-titulo' }, habito.nome),
+            h('span', { class: 'tarefa-sub' }, `${dias} dias seguidos`),
+          ),
+        ),
+      ),
+    ),
+    resumo.total > resumo.primeiras.length
+      ? h(
+          'button',
+          { type: 'button', class: 'botao painel-ver', onclick: () => irPara('habitos') },
+          `Ver todas (${resumo.total})`,
+        )
+      : null,
   );
 }
 
@@ -155,10 +225,13 @@ function render(raiz) {
     registros: estado.registros,
     tarefas: estado.tarefas,
     dia,
+    hora: agoraLocal().slice(11),
   });
   const { tarefas: deHoje } = resumo;
 
-  raiz.replaceChildren(
+  // Os blocos de sequências e de tarefas devolvem null quando não há o que mostrar, e o
+  // replaceChildren do navegador escreveria a palavra "null" na tela: só entra o que é elemento.
+  const blocos = [
     h('p', { class: 'painel-data' }, fmtDia.format(new Date())),
     blocoDaRotina(rotina, resumo.rotina),
     h(
@@ -173,8 +246,10 @@ function render(raiz) {
         'tarefas',
       ),
     ),
+    blocoDasSequencias(resumo.emRisco),
     blocoDasTarefas(deHoje, dia),
-  );
+  ];
+  raiz.replaceChildren(...blocos.filter(Boolean));
 }
 
 export const painel = {

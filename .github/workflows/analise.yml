@@ -63,8 +63,9 @@ jobs:
           fail-on-severity: moderate
           comment-summary-in-pr: never
 
-  # Confere os próprios workflows: sintaxe, expressões e os scripts de shell dentro deles.
-  # A imagem é fixada pelo digest, como as actions são fixadas pelo hash do commit.
+  # Confere os próprios workflows: sintaxe, expressões e os scripts de shell dentro deles
+  # (actionlint) e a segurança deles (zizmor). As imagens são fixadas pelo digest, como as
+  # actions são fixadas pelo hash do commit.
   workflows:
     name: Workflows
     runs-on: ubuntu-24.04
@@ -78,3 +79,12 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
+
+      # Injeção de template, permissões demais, action ou imagem sem hash, credencial
+      # persistida, envenenamento de cache, gatilhos perigosos e o cooldown do Dependabot.
+      # --offline: não consulta a API do GitHub, então não precisa de token e o resultado só
+      # muda quando mudam os arquivos. Reprova em qualquer achado.
+      - name: zizmor
+        uses: docker://ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d
+        with:
+          args: --offline --format=github .
