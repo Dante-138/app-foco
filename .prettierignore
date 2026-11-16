@@ -1,6 +1,7 @@
 node_modules/
 referencias/
 dist/
+.stryker-tmp/
 android/
 package-lock.json
 CHANGELOG.md
