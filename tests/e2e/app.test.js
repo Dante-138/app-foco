@@ -2287,3 +2287,42 @@ test('hábito com dias da semana: fora deles o dia vira folga sem gravar nada', 
   assert.equal(await pagina.locator('.dia-semana[aria-pressed=true]').count(), 1);
   assert.deepEqual(erros, []);
 });
+
+test('título grande: encolhe ao rolar a lista e volta ao subir', async (t) => {
+  const { pagina } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const escalaDoTitulo = (rolagem) =>
+    pagina.evaluate(async (y) => {
+      const conteudo = document.getElementById('conteudo');
+      if (!conteudo.querySelector('.teste-altura')) {
+        const alto = document.createElement('div');
+        alto.className = 'teste-altura';
+        alto.style.height = '3000px';
+        conteudo.append(alto);
+      }
+      conteudo.scrollTop = y;
+      await new Promise((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(r));
+      });
+      const h1 = document.getElementById('titulo');
+      const linha = getComputedStyle(document.querySelector('.topo'), '::after').opacity;
+      return {
+        tamanho: getComputedStyle(h1).fontSize,
+        escala: new DOMMatrix(getComputedStyle(h1).transform).a,
+        linha: Number(linha),
+      };
+    }, rolagem);
+
+  const noTopo = await escalaDoTitulo(0);
+  assert.equal(noTopo.tamanho, '34px');
+  assert.equal(noTopo.escala, 1);
+  assert.equal(noTopo.linha, 0);
+
+  const rolado = await escalaDoTitulo(200);
+  assert.ok(Math.abs(rolado.escala - 0.647) < 0.01, `escala ${rolado.escala}`);
+  assert.equal(rolado.linha, 1);
+
+  const deVolta = await escalaDoTitulo(0);
+  assert.equal(deVolta.escala, 1);
+});
