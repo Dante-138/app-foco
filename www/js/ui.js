@@ -388,6 +388,50 @@ export function abrirFolha({
   return fechar;
 }
 
+// Janela pequena presa a um elemento da tela (como o popup da marca no Loop), em vez da folha
+// que sobe do rodapé. Usa a mesma guarda do botão voltar das folhas. rotulo: nome para o
+// leitor de tela. aoTocarFora: chamado quando o toque começa e termina fora da janela
+// (sem ele, fecha). Devolve a função que fecha.
+export function abrirJanela({ rotulo, ancora, corpo, aoTocarFora }) {
+  const fechar = abrirFolha({ corpo, fecharNoFundo: false });
+  const dialogo = corpo.closest('dialog');
+  dialogo.classList.add('janela');
+  dialogo.setAttribute('aria-label', rotulo);
+  // A janela não tem puxador nem título: some com o topo da folha.
+  dialogo.querySelector('.folha-topo')?.remove();
+  dialogo.querySelector('.folha-pega')?.remove();
+
+  let comecouFora = false;
+  dialogo.addEventListener('pointerdown', (e) => {
+    comecouFora = e.target === dialogo;
+  });
+  dialogo.addEventListener('click', (e) => {
+    if (!comecouFora || e.target !== dialogo) return;
+    if (aoTocarFora) aoTocarFora();
+    else fechar();
+  });
+
+  posicionarJanela(dialogo, ancora);
+  return fechar;
+}
+
+// Abaixo do elemento quando cabe; senão, acima. Centrada nele, sem sair da margem de 16 px.
+// A animação de abrir cresce a partir do elemento.
+function posicionarJanela(dialogo, ancora) {
+  const margem = 16;
+  const alvo = ancora.getBoundingClientRect();
+  const largura = dialogo.offsetWidth;
+  const altura = dialogo.offsetHeight;
+  const centro = alvo.left + alvo.width / 2;
+  const esquerda = Math.min(Math.max(centro - largura / 2, margem), window.innerWidth - largura - margem);
+  const abaixo = alvo.bottom + 8;
+  const embaixo = abaixo + altura <= window.innerHeight - margem;
+  const topo = embaixo ? abaixo : Math.max(margem, alvo.top - 8 - altura);
+  dialogo.style.setProperty('left', `${esquerda}px`);
+  dialogo.style.setProperty('top', `${topo}px`);
+  dialogo.style.setProperty('transform-origin', `${centro - esquerda}px ${embaixo ? 0 : altura}px`);
+}
+
 // Cada opção: { rotulo, acao, perigo, desativado } e, para as que ficam marcadas:
 //   marcado (verdadeiro ou falso): liga e desliga, como um interruptor;
 //   atual (verdadeiro ou falso): a escolhida entre várias.
@@ -473,6 +517,14 @@ export function estadoVazio(titulo, dica, { compacto = false } = {}) {
 // botão, como o "Desfazer" depois de uma exclusão: tocar executa e fecha o aviso.
 // Um aviso novo substitui o anterior, e com ele vai embora a ação que o anterior oferecia.
 const AVISO_MS = 4000;
+
+// Aviso com "Desfazer" depois de concluir ou excluir. desfazer põe tudo como estava
+// (e grava); o aviso some sozinho e a ação fica.
+export const DESFAZER_MS = 5000;
+
+export function avisarComDesfazer(texto, desfazer) {
+  avisar(texto, { duracao: DESFAZER_MS, acao: { rotulo: 'Desfazer', executar: desfazer } });
+}
 
 export function avisar(texto, { acao = null, duracao = AVISO_MS } = {}) {
   for (const anterior of document.querySelectorAll('.aviso')) anterior.remove();
