@@ -17,6 +17,7 @@ export function estadoInicial({ dia, gerarId }) {
     aba: ABAS[0],
     rotinas: [],
     rotinaAtiva: null,
+    rotinaDoDiaEm: null,
     marcasRotina: { data: dia, porRotina: {} },
     marcadosNoFim: true,
     habitos: [],

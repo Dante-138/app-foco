@@ -790,6 +790,81 @@ test('rotina: fazer uma cópia (sem as marcas do dia) e mover a rotina na faixa'
   assert.deepEqual(erros, []);
 });
 
+test('rotina do dia: os dias escolhidos no menu; ao virar o dia abre a rotina do dia, sem desfazer a troca à mão', async (t) => {
+  // Dados da versão 5, sem dias: nada muda sozinho. O relógio começa na sexta, 13/11/2026.
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'rotinas',
+    rotinas: [
+      { id: 'semana', nome: 'Semana', itens: [{ id: 'a', tipo: 'item', texto: 'Bater o ponto' }] },
+      { id: 'folga', nome: 'Folga', itens: [{ id: 'b', tipo: 'item', texto: 'Dormir até tarde' }] },
+    ],
+    rotinaAtiva: 'folga',
+  });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: (contexto) => contexto.clock.install({ time: new Date('2026-11-13T12:00:00-03:00') }),
+  });
+  const aberta = (nome) => visivel(pagina.getByRole('heading', { name: nome, exact: true }));
+  const rotinasSalvas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas;
+  const abrirDias = async (rotulo) => {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, rotulo).click();
+  };
+  const salvarDias = async () => {
+    await botao(pagina, 'Salvar').click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  // Sem dias, a rotina aberta continua a mesma, e abrir o app não regrava os dados.
+  await aberta('Folga');
+  assert.equal(await lerSalvo(pagina, CHAVE), salvo);
+
+  // Folga: sábado e domingo, pelo atalho.
+  await abrirDias('Dias da semana');
+  await botao(pagina, 'Sáb e dom').click();
+  assert.equal(await botao(pagina, 'Sábado').getAttribute('aria-pressed'), 'true');
+  assert.equal(await botao(pagina, 'Segunda').getAttribute('aria-pressed'), 'false');
+  await salvarDias();
+  await visivel(pagina.getByText('0 de 1 hoje · sáb e dom'));
+
+  // Semana: de segunda a sexta e mais o sábado, que sai da Folga.
+  await pagina.locator('.faixa .chip', { hasText: 'Semana' }).click();
+  await abrirDias('Dias da semana');
+  await botao(pagina, 'Seg a sex').click();
+  await botao(pagina, 'Sábado').click();
+  await salvarDias();
+  assert.deepEqual(
+    (await rotinasSalvas()).map((r) => r.diasDaSemana),
+    [[1, 2, 3, 4, 5, 6], [0]],
+  );
+  await botao(pagina, 'Opções da rotina').click();
+  await visivel(botao(pagina, 'Dias da semana: seg, ter, qua, qui, sex e sáb'));
+  await pagina.keyboard.press('Escape');
+
+  // Troca à mão na sexta: recarregar no mesmo dia não volta para a rotina do dia.
+  await pagina.locator('.faixa .chip', { hasText: 'Folga' }).click();
+  await aberta('Folga');
+  await recarregar(pagina);
+  await aberta('Folga');
+
+  // Virou para sábado com o app aberto: abre a Semana. No domingo, a Folga.
+  await pagina.clock.fastForward('24:00:00');
+  await aberta('Semana');
+  await pagina.clock.fastForward('24:00:00');
+  await aberta('Folga');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).rotinaDoDiaEm, '2026-11-15');
+
+  // A cópia nasce sem dias: o domingo continua só com a Folga.
+  await abrirDias('Fazer uma cópia');
+  await aberta('Folga (cópia)');
+  assert.deepEqual(
+    (await rotinasSalvas()).map((r) => r.diasDaSemana),
+    [[1, 2, 3, 4, 5, 6], [0], []],
+  );
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: a caixa da seção marca e desmarca o bloco inteiro, e o desfazer volta o bloco de uma vez', async (t) => {
   const { pagina, erros } = await abrir(t);
   const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
@@ -1814,6 +1889,8 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
           item('i3', 'Bater o ponto', '09:00'),
         ],
       },
+      // Rotina do domingo (o dia seguinte ao do relógio): os avisos de amanhã vêm dela.
+      { id: 'd', nome: 'Domingo', diasDaSemana: [0], itens: [item('j1', 'Passear', '10:00')] },
     ],
     habitos: [
       { id: 'ler', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
@@ -1877,7 +1954,12 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
   await rotinaNoRelogio.click();
   assert.equal(await rotinaNoRelogio.getAttribute('aria-checked'), 'true');
   await botao(pagina, 'Fechar').click();
-  const daRotina = await avisos('rotina', 6);
+  // Três de hoje, da rotina aberta, e um de amanhã, da rotina do domingo.
+  const daRotina = await avisos('rotina', 4);
+  assert.deepEqual([daRotina[3].title, daRotina[3].body], ['Passear', '10:00 · Domingo']);
+  assert.equal(await horaLocal(daRotina[3]), '15 10:00');
+  const resumos = await avisos('manha', 7);
+  assert.equal(resumos[1].body, 'Rotina Domingo · 2 hábitos');
   assert.deepEqual(
     daRotina.slice(0, 3).map((x) => [x.title, x.body]),
     [
@@ -1913,7 +1995,12 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
     CHAVE,
     ESPERA,
   );
-  await avisos('habito', 2);
+  // Hoje a rotina aberta avisa pela Leitura; amanhã a rotina do domingo não tem esse item, e vale o lembrete dela.
+  const comAmanha = await avisos('habito', 3);
+  assert.deepEqual(
+    comAmanha.map((x) => x.title),
+    ['Alongar', 'Alongar', 'Leitura'],
+  );
 
   // Tocar em "Feito": o hábito é marcado no dia do aviso, o aviso de hoje sai e a revisão acompanha.
   await tocar(deHoje, 'feito');
@@ -1923,7 +2010,7 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
     ESPERA,
   );
   await esperarTitulo(pagina, 'Hábitos - Foco');
-  const [soAmanha] = await avisos('habito', 1);
+  const [soAmanha] = await avisos('habito', 2);
   assert.equal(await horaLocal(soAmanha), '15 08:00');
   await corpoDe('noite', 7, 'Faltam: 1 hábito e 3 itens da rotina.');
 
@@ -1954,7 +2041,7 @@ test('avisos do dia: resumo, revisão, rotina no relógio e lembrete do hábito 
   await tocar(daRotina[0]);
   await esperarTitulo(pagina, 'Painel - Foco');
   await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
-  const restantes = await avisos('rotina', 5);
+  const restantes = await avisos('rotina', 3);
   assert.equal(restantes[0].title, 'Ler um capítulo');
   await corpoDe('noite', 7, 'Faltam: 1 hábito e 2 itens da rotina.');
 

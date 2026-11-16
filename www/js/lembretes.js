@@ -11,6 +11,7 @@ import { agoraLocal } from './nucleo/datas.js';
 import { valeNoDia } from './nucleo/habito-calculo.js';
 import { MAXIMO_DE_LEMBRETES, planejar } from './nucleo/lembretes.js';
 import { planejarDoDia } from './nucleo/avisos-do-dia.js';
+import { rotinaDoDia } from './nucleo/rotina-do-dia.js';
 import { mudancas } from './nucleo/sincronia.js';
 
 // Tipo de notificação com o botão "Feito" (o lembrete de um hábito de sim ou não).
@@ -54,6 +55,7 @@ export async function pedirPermissaoSeFaltar() {
 function planoEm(agoraDasTarefas, agoraDoDia, { semLimite = false } = {}) {
   if (!estado.lembretes) return [];
   const rotina = estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? null;
+  const hojeDoPlano = agoraDoDia.slice(0, 10);
   const maximo = semLimite ? Infinity : MAXIMO_DE_LEMBRETES;
   const dasTarefas = planejar(estado.tarefas, estado.listas, agoraDasTarefas, maximo).map((lembrete) => ({
     ...lembrete,
@@ -64,7 +66,9 @@ function planoEm(agoraDasTarefas, agoraDoDia, { semLimite = false } = {}) {
   }));
   const doDia = planejarDoDia(
     {
-      rotinaDe: () => rotina,
+      // Hoje vale a rotina aberta (pode ter sido trocada à mão); nos outros dias, a rotina
+      // daquele dia da semana, ou a aberta quando o dia não tem rotina própria.
+      rotinaDe: (dia) => (dia === hojeDoPlano ? rotina : (rotinaDoDia(estado.rotinas, dia) ?? rotina)),
       marcadas: new Set(rotina ? (marcasDeHoje()[rotina.id] ?? []) : []),
       habitos: estado.habitos,
       registros: estado.registros,

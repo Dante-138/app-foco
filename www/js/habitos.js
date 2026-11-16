@@ -3,7 +3,7 @@
 
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
-import { hoje, dataValida, deIso, somaDias } from './nucleo/datas.js';
+import { DIAS_DA_SEMANA, hoje, dataValida, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import {
@@ -15,7 +15,6 @@ import {
   proximaMarca,
   resolvido,
   sequencias,
-  TODOS_OS_DIAS,
   valeNoDia,
   valorDoDia,
   visiveis,
@@ -35,6 +34,7 @@ import {
   redesenhar,
   vibrar,
 } from './ui.js';
+import { seletorDeDias } from './dias-da-semana.js';
 
 const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
@@ -43,17 +43,6 @@ const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 // A célula que acabou de ser marcada, para o próximo desenho animar só ela:
 // { habitoId, dia, concluiu }. O desenho consome e zera.
 let recemMarcada = null;
-
-// Dias da semana no seletor do hábito, de domingo a sábado (o número é o de Date.getDay).
-const DIAS_DA_SEMANA = [
-  [0, 'D', 'Domingo'],
-  [1, 'S', 'Segunda'],
-  [2, 'T', 'Terça'],
-  [3, 'Q', 'Quarta'],
-  [4, 'Q', 'Quinta'],
-  [5, 'S', 'Sexta'],
-  [6, 'S', 'Sábado'],
-];
 
 // Com "ocultar concluídos" ligado, o hábito recém-resolvido fica na tela este tempo,
 // para a resposta ao toque aparecer, e só então sai da grade.
@@ -452,33 +441,10 @@ function editarHabito(habito) {
   };
 
   // Dias da semana em que o hábito vale; fora deles o dia vira folga sozinho. Pelo menos um.
-  const dias = new Set(habito?.diasDaSemana ?? TODOS_OS_DIAS);
-  const seletorDeDias = h('div', { class: 'dias-semana', role: 'group', 'aria-label': 'Dias da semana' });
-  const desenharDias = () => {
-    seletorDeDias.replaceChildren(
-      ...DIAS_DA_SEMANA.map(([numero, letra, nomeDoDia]) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            class: `dia-semana${dias.has(numero) ? ' ativo' : ''}`,
-            'aria-pressed': String(dias.has(numero)),
-            'aria-label': nomeDoDia,
-            onclick: () => {
-              if (dias.has(numero) && dias.size > 1) dias.delete(numero);
-              else dias.add(numero);
-              desenharDias();
-            },
-          },
-          letra,
-        ),
-      ),
-    );
-  };
+  const dias = seletorDeDias(habito?.diasDaSemana ?? DIAS_DA_SEMANA, { minimo: 1 });
 
   desenharCores();
   desenharTipo();
-  desenharDias();
 
   const aoSalvar = (e) => {
     e.preventDefault();
@@ -489,7 +455,7 @@ function editarHabito(habito) {
       return;
     }
 
-    const diasDaSemana = [...dias].sort((a, b) => a - b);
+    const diasDaSemana = dias.ler();
     const dados = {
       nome: nomeFinal,
       cor,
@@ -553,7 +519,7 @@ function editarHabito(habito) {
         'div',
         { class: 'rotulo' },
         'Dias',
-        seletorDeDias,
+        dias.grupo,
         h('span', { class: 'dica' }, 'Fora destes dias, o dia vira folga sozinho.'),
       ),
       camposNumero,
