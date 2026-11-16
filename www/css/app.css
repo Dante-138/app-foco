@@ -460,7 +460,7 @@ ul {
   border-radius: 16px;
   background: var(--fab-fundo);
   color: var(--fab-texto);
-  box-shadow: 0 4px 14px var(--sombra);
+  box-shadow: 0 2px 6px var(--sombra);
 }
 
 .fab:active {
@@ -556,7 +556,7 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 4px 12px 10px;
+  padding: 4px 16px 12px;
   background: var(--fundo);
   scrollbar-width: none;
   touch-action: pan-x pan-y; /* a faixa rola para os lados; o resto do conteúdo, não */
@@ -570,9 +570,9 @@ body {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 1px solid var(--linha);
   border-radius: 999px;
   color: var(--texto-2);
@@ -638,7 +638,7 @@ body {
 }
 
 .cartao {
-  margin: 0 12px 10px;
+  margin: 0 16px 12px;
   padding: 4px 0;
   background: var(--sup-1);
   border-radius: 16px;
@@ -676,7 +676,7 @@ body {
   border-radius: 12px;
   background: #2e2e33; /* aviso escuro nos dois temas */
   color: #ededed;
-  box-shadow: 0 4px 14px var(--sombra);
+  box-shadow: 0 2px 6px var(--sombra);
   font-size: 15px;
   line-height: 20px;
 }
@@ -815,7 +815,7 @@ body {
 .ligacao {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   font-size: 15px;
   line-height: 20px;
@@ -1010,7 +1010,7 @@ li.mudando-de-area.saindo {
 .grade {
   --n: 6;
   --cel: 44px; /* mesmo valor usado no cálculo de colunas em habitos.js */
-  padding: 0 4px 0 14px;
+  padding: 0 4px 0 16px;
 }
 
 .grade-cab,
@@ -1055,7 +1055,7 @@ li.mudando-de-area.saindo {
 .habito-nome {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   min-height: 44px;
   padding: 4px 8px 4px 0;
@@ -1289,12 +1289,12 @@ li.mudando-de-area.saindo {
 /* Grupos por data: um respiro maior entre um dia e outro. O de hoje ganha o título
    na cor de destaque e um pouco mais de espaço em volta, como no Google Tasks. */
 .cartao.grupo {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .grupo.hoje {
-  margin-top: 18px;
-  margin-bottom: 22px;
+  margin-top: 16px;
+  margin-bottom: 24px;
 }
 
 .grupo.hoje .grupo-titulo {
@@ -1496,14 +1496,14 @@ li.mudando-de-area.saindo {
 .painel-contadores {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 0 12px 10px;
+  gap: 12px;
+  margin: 0 16px 12px;
 }
 
 .painel-contador {
   display: grid;
   gap: 4px;
-  padding: 14px 16px;
+  padding: 16px;
   border-radius: 16px;
   background: var(--sup-1);
   text-align: left;
@@ -1574,7 +1574,7 @@ dialog.folha[open]::backdrop {
 
 .folha-dentro {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   padding: 10px 16px calc(16px + var(--base-segura));
 }
 
@@ -1764,7 +1764,7 @@ dialog.folha.arrastando {
 
 .folha-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .rotulo {
@@ -1843,8 +1843,8 @@ textarea.editor {
 
 .botao {
   min-height: 44px;
-  padding: 0 18px;
-  border-radius: 999px;
+  padding: 0 16px;
+  border-radius: 10px;
   font-weight: 600;
   color: var(--acento);
 }
@@ -1902,7 +1902,7 @@ textarea.editor {
 .amostras {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .amostra {
@@ -1943,7 +1943,7 @@ textarea.editor {
 .dupla {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .atalhos {
