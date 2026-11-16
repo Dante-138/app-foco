@@ -3,7 +3,7 @@
 
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
-import { hoje, deIso, somaDias } from './nucleo/datas.js';
+import { DIAS_DA_SEMANA, hoje, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import {
@@ -15,6 +15,8 @@ import {
   proximaMarca,
   resolvido,
   sequencias,
+  valeNoDia,
+  valorDoDia,
   visiveis,
 } from './nucleo/habito-calculo.js';
 import {
@@ -31,6 +33,7 @@ import {
   redesenhar,
   vibrar,
 } from './ui.js';
+import { seletorDeDias } from './dias-da-semana.js';
 
 const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
@@ -427,6 +430,9 @@ function editarHabito(habito) {
     camposNumero.hidden = tipo !== 'numero';
   };
 
+  // Dias da semana em que o hábito vale; fora deles o dia vira folga sozinho. Pelo menos um.
+  const dias = seletorDeDias(habito?.diasDaSemana ?? DIAS_DA_SEMANA, { minimo: 1 });
+
   desenharCores();
   desenharTipo();
 
@@ -439,7 +445,8 @@ function editarHabito(habito) {
       return;
     }
 
-    const dados = { nome: nomeFinal, cor, tipo, unidade: null, meta: null };
+    const diasDaSemana = dias.ler();
+    const dados = { nome: nomeFinal, cor, tipo, unidade: null, meta: null, diasDaSemana };
     if (tipo === 'numero') {
       dados.unidade = unidade.value.trim() || null;
       dados.meta = lerNumero(meta.value) || 1;
@@ -488,6 +495,13 @@ function editarHabito(habito) {
       campo('Nome', nome),
       h('div', { class: 'rotulo' }, 'Cor', amostras),
       h('div', { class: 'rotulo' }, 'Tipo', segmentos),
+      h(
+        'div',
+        { class: 'rotulo' },
+        'Dias',
+        dias.grupo,
+        h('span', { class: 'dica' }, 'Fora destes dias, o dia vira folga sozinho.'),
+      ),
       camposNumero,
       habito
         ? h(
@@ -541,37 +555,49 @@ function celula(habito, dia, diaHoje) {
   return botao;
 }
 
+// Rótulo de cada estado para o leitor de tela. A folga automática (dia fora da frequência,
+// sem nada gravado) aparece como a folga marcada, só que mais apagada.
+const ROTULO_FOLGA = 'folga';
+
 function celulaSemNota(habito, dia, diaHoje) {
-  const valor = estado.registros[habito.id]?.[dia];
-  const base = { type: 'button' };
-  const resposta = respostaAoToque(habito, dia);
+  const gravado = estado.registros[habito.id]?.[dia];
+  const valor = valorDoDia(habito, estado.registros[habito.id], dia);
+  // A folga automática e a resposta ao toque entram juntas no fim das classes da célula.
+  const folgaAutomatica = gravado === undefined && !valeNoDia(habito, dia);
+  const extra = `${folgaAutomatica ? ' folga-auto' : ''}${respostaAoToque(habito, dia)}`;
+  const rotulo = (estadoTexto) => `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`;
+  return habito.tipo === 'numero'
+    ? celulaNumerica(habito, dia, { valor, extra, rotulo })
+    : celulaSimNao(habito, dia, { valor, extra, rotulo });
+}
 
-  if (habito.tipo === 'numero') {
-    const pulado = valor === 'pulado';
-    const numero = typeof valor === 'number' ? valor : null;
-    const estadoTexto = pulado ? 'pulado' : `${formatar(numero ?? 0)} ${habito.unidade ?? ''}`.trim();
-    return h(
-      'button',
-      {
-        ...base,
-        class: `cel num${numero == null && !pulado ? ' vazio' : ''}${numero != null && !cumprido(habito, numero) ? ' parcial' : ''}${resposta}`,
-        'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
-        onclick: () => pedirValor(habito, dia),
-      },
-      pulado
-        ? icone('menos', { tam: 20 })
-        : [h('b', {}, formatar(numero ?? 0)), habito.unidade ? h('small', {}, habito.unidade) : null],
-    );
-  }
-
-  const marca = valor === 'feito' ? 'check' : valor === 'pulado' ? 'menos' : 'x';
-  const estadoTexto = valor === 'feito' ? 'feito' : valor === 'pulado' ? 'pulado' : 'não feito';
+function celulaNumerica(habito, dia, { valor, extra, rotulo }) {
+  const pulado = valor === 'pulado';
+  const numero = typeof valor === 'number' ? valor : null;
+  const estadoTexto = pulado ? ROTULO_FOLGA : `${formatar(numero ?? 0)} ${habito.unidade ?? ''}`.trim();
   return h(
     'button',
     {
-      ...base,
-      class: `cel${marca === 'x' ? ' vazio' : ''}${resposta}`,
-      'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
+      type: 'button',
+      class: `cel num${numero == null && !pulado ? ' vazio' : ''}${numero != null && !cumprido(habito, numero) ? ' parcial' : ''}${extra}`,
+      'aria-label': rotulo(estadoTexto),
+      onclick: () => pedirValor(habito, dia),
+    },
+    pulado
+      ? icone('menos', { tam: 20 })
+      : [h('b', {}, formatar(numero ?? 0)), habito.unidade ? h('small', {}, habito.unidade) : null],
+  );
+}
+
+function celulaSimNao(habito, dia, { valor, extra, rotulo }) {
+  const marca = valor === 'feito' ? 'check' : valor === 'pulado' ? 'menos' : 'x';
+  const estadoTexto = valor === 'feito' ? 'feito' : valor === 'pulado' ? ROTULO_FOLGA : 'não feito';
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: `cel${marca === 'x' ? ' vazio' : ''}${extra}`,
+      'aria-label': rotulo(estadoTexto),
       onclick: () => alternar(habito, dia),
     },
     icone(marca, { tam: marca === 'x' ? 16 : 20 }),
@@ -601,7 +627,7 @@ function render(raiz) {
   const ocultos = estado.habitos.length - naGrade.length;
   const vaiSumir =
     estado.ocultarConcluidos &&
-    naGrade.some((x) => x.id === manter && resolvido(x, estado.registros[x.id]?.[diaHoje]));
+    naGrade.some((x) => x.id === manter && resolvido(x, valorDoDia(x, estado.registros[x.id], diaHoje)));
 
   raiz.replaceChildren(
     h(
