@@ -4,7 +4,7 @@ import { estado, salvar, substituirEstado } from './store.js';
 import { hoje } from './nucleo/datas.js';
 import { uid } from './nucleo/ids.js';
 import { MOTIVO, gerarBackup, lerBackup, resumir } from './nucleo/backup.js';
-import { h, abrirFolha, confirmar, campo, avisar, redesenhar } from './ui.js';
+import { h, icone, abrirFolha, confirmar, campo, avisar, redesenhar } from './ui.js';
 import { descreverBuild } from './nucleo/build.js';
 import { BUILD } from './build-info.js';
 import { temaEscolhido, definirTema } from './tema.js';
@@ -14,6 +14,7 @@ import {
   pedirPermissaoDeLembretes,
   permissaoDeLembretes,
 } from './lembretes.js';
+import { abrirPausas } from './pausas.js';
 
 const TEMAS = [
   ['escuro', 'Escuro'],
@@ -129,6 +130,14 @@ function abrirRestauracao() {
 
 // ------------------------------------------------------------- lembretes
 
+// Avisos do dia (estado.avisosDoDia), na ordem em que aparecem nos Ajustes.
+const AVISOS_DO_DIA = [
+  ['manha', 'Resumo da manhã, às 7h'],
+  ['noite', 'Revisão da noite, às 22h'],
+  ['rotina', 'Rotina no relógio: item com horário avisa na hora'],
+  ['habitos', 'Lembrete dos hábitos, na hora de cada um'],
+];
+
 const SITUACAO_DOS_LEMBRETES = {
   granted: 'Tarefa com horário avisa na hora; só com data, às 9h.',
   denied: 'As notificações do Foco estão bloqueadas nas configurações do Android.',
@@ -152,8 +161,35 @@ function secaoDeLembretes() {
     'Permitir notificações',
   );
 
+  // Um interruptor por aviso do dia; somem com os lembretes desligados.
+  const avisosDoDia = h('div', { class: 'menu' });
+  const desenharAvisos = () => {
+    avisosDoDia.hidden = !estado.lembretes;
+    avisosDoDia.replaceChildren(
+      ...AVISOS_DO_DIA.map(([chave, rotulo]) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'menu-item',
+            role: 'switch',
+            'aria-checked': String(estado.avisosDoDia[chave]),
+            onclick: () => {
+              estado.avisosDoDia[chave] = !estado.avisosDoDia[chave];
+              salvar(); // quem salva avisa os lembretes, que agendam ou cancelam o que mudou
+              desenharAvisos();
+            },
+          },
+          h('span', {}, rotulo),
+          estado.avisosDoDia[chave] ? icone('check', { tam: 20 }) : null,
+        ),
+      ),
+    );
+  };
+
   const desenhar = async () => {
     const ligados = estado.lembretes;
+    desenharAvisos();
     interruptor.setAttribute('aria-checked', String(ligados));
     interruptor.textContent = ligados ? 'Lembretes ligados' : 'Lembretes desligados';
     const permissao = ligados ? await permissaoDeLembretes() : null;
@@ -181,6 +217,7 @@ function secaoDeLembretes() {
     'Lembretes',
     h('div', { class: 'linha-botoes inicio' }, interruptor, permitir),
     situacao,
+    avisosDoDia,
   );
 }
 
@@ -217,6 +254,28 @@ export function abrirAjustes() {
       { class: 'folha-form' },
       h('div', { class: 'rotulo' }, 'Aparência', segmentos),
       secaoDeLembretes(),
+      h(
+        'div',
+        { class: 'rotulo' },
+        'Férias e feriados',
+        h(
+          'div',
+          { class: 'linha-botoes inicio' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'botao contorno',
+              onclick: () => {
+                fechar();
+                abrirPausas();
+              },
+            },
+            estado.pausas.length ? `Pausas (${estado.pausas.length})` : 'Cadastrar pausa',
+          ),
+        ),
+        h('p', { class: 'dica' }, 'Nos dias de pausa os hábitos ficam de folga e a sequência não quebra.'),
+      ),
       h(
         'div',
         { class: 'rotulo' },

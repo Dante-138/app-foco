@@ -31,10 +31,12 @@ function comDados() {
         meta: null,
         arquivado: true,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: '21:30',
       },
     ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },
     notasHabito: { h: { '2026-11-11': 'Dia de viagem' } },
+    pausas: [{ id: 'p', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' }],
     listas: [{ id: 'l', nome: 'Faculdade' }],
     listaAtiva: 'l',
     tarefas: [

@@ -86,9 +86,10 @@ function lembretesDaTarefa(tarefa, nomeDaLista, dia) {
 
 // tarefas e listas: do estado do app. agora: momento atual, "AAAA-MM-DDTHH:MM" local.
 // Devolve os lembretes das tarefas pendentes com prazo cujo momento ainda não passou,
-// do mais próximo para o mais distante, no máximo MAXIMO_DE_LEMBRETES:
+// do mais próximo para o mais distante, no máximo "maximo" (o limite do que fica agendado):
 //   [{ id, tarefaId, titulo, corpo, quando }]
-export function planejar(tarefas, listas, agora) {
+// Quem quer saber quais lembretes continuam valendo, e não o que agendar, passa Infinity.
+export function planejar(tarefas, listas, agora, maximo = MAXIMO_DE_LEMBRETES) {
   const nomes = new Map(listas.map((lista) => [lista.id, lista.nome]));
   const dia = agora.slice(0, 10);
   const futuros = tarefas
@@ -100,7 +101,7 @@ export function planejar(tarefas, listas, agora) {
   const usados = new Set();
   const plano = [];
   for (const { id, tarefaId, titulo, corpo, quando } of futuros) {
-    if (plano.length === MAXIMO_DE_LEMBRETES) break;
+    if (plano.length === maximo) break;
     if (usados.has(id)) continue; // dois textos com o mesmo número: fica o lembrete mais próximo
     usados.add(id);
     plano.push({ id, tarefaId, titulo, corpo, quando });

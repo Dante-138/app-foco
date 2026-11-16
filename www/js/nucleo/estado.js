@@ -3,6 +3,7 @@
 
 import { VERSAO, migrar } from './migracao.js';
 import { ABAS, NOME_LISTA_PADRAO, ORDENS_TAREFAS, ehObjeto, sanear } from './esquema.js';
+import { avisosDoDiaValidos } from './avisos-do-dia.js';
 
 export const PROBLEMA = Object.freeze({
   ILEGIVEL: 'ilegivel', // o texto salvo não é JSON de um objeto
@@ -24,11 +25,13 @@ export function estadoInicial({ dia, gerarId }) {
     notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
+    pausas: [],
     listas: [lista],
     listaAtiva: lista.id,
     tarefas: [],
     ordemTarefas: ORDENS_TAREFAS[0],
     lembretes: true,
+    avisosDoDia: avisosDoDiaValidos(null),
   };
 }
 

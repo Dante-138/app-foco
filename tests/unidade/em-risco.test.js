@@ -75,3 +75,15 @@ test('folga automática: fora dos dias da semana do hábito ele não está em ri
   // Marcar num dia de folga vale: quem fez hoje não está em risco.
   assert.deepEqual(sequenciasEmRisco([segAQui], { h: { ...registros.h, [HOJE]: 'feito' } }, HOJE), []);
 });
+
+test('pausa: dia de pausa hoje tira o hábito da lista e pausa ontem não quebra a sequência', () => {
+  const habitos = [simNao('leitura')];
+  const registros = { leitura: seguidos(3, somaDias(HOJE, -2)) }; // ontem em branco
+  assert.deepEqual(sequenciasEmRisco(habitos, registros, HOJE), []);
+
+  const ontem = [{ id: 'p', nome: 'Feriado', de: ONTEM, ate: ONTEM }];
+  assert.deepEqual(resumo(sequenciasEmRisco(habitos, registros, HOJE, ontem)), [['leitura', 3]]);
+
+  const hoje = [{ id: 'p', nome: 'Férias', de: ONTEM, ate: HOJE }];
+  assert.deepEqual(sequenciasEmRisco(habitos, registros, HOJE, hoje), []);
+});

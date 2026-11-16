@@ -16,6 +16,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
   mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um
   dia abre a folha dele: o estado (feito, folga ou vazio; quantidade, no numérico) e uma nota.
+  Férias e feriados (em Ajustes) deixam todos os hábitos de folga nos dias da pausa: a sequência
+  não quebra e a pontuação não cai.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
   semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
@@ -27,6 +29,12 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
   se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.
+- **Avisos do dia**: também por notificação, cada um com o seu interruptor em Ajustes (a rotina
+  no relógio nasce desligada; os outros, ligados). Resumo
+  da manhã às 7h (rotina, hábitos e tarefas do dia), revisão da noite às 22h (o que falta), a
+  rotina no relógio (cada item com horário avisa na hora, se ainda não foi marcado) e o
+  lembrete do hábito, na hora escolhida na edição dele, com o botão "Feito" na própria
+  notificação. Hábito ligado a um item de rotina com horário é avisado pela rotina, sem repetir.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo. Em rotina com horários, a lista começa
   no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em

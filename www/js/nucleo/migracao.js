@@ -50,8 +50,11 @@ function v1ParaV2(dados) {
 // A v8 acrescenta os avisos antecipados da tarefa (dias antes do prazo). Não há o que
 // converter: sem o campo, a tarefa avisa só no prazo, como antes.
 
-// Da v9 à v10 são outras mudanças de formato da mesma leva (cada uma no seu PR);
-// aqui o passo só sobe o número.
+// A v9 acrescenta a hora do lembrete do hábito e quais avisos do dia estão ligados. Não há
+// o que converter: sem os campos, o hábito não tem lembrete e os avisos nascem no padrão.
+
+// A v10 acrescenta as pausas (férias e feriados). Não há o que converter: sem o campo, não
+// há pausa nenhuma e as contas dos hábitos ficam como antes.
 
 // A v11 acrescenta as subtarefas da tarefa. Não há o que converter: sem o campo, a tarefa
 // não tem subtarefa nenhuma, como antes.
