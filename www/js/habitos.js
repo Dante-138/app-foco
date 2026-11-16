@@ -5,6 +5,7 @@ import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { DIAS_DA_SEMANA, hoje, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
+import { devolver, retirar } from './nucleo/desfazer.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import {
   formatar,
@@ -28,6 +29,7 @@ import {
   abrirMenu,
   aoSegurar,
   avisar,
+  avisarComDesfazer,
   confirmar,
   campo,
   estadoVazio,
@@ -474,16 +476,27 @@ function editarHabito(habito) {
 
   const excluir = async () => {
     if (!(await confirmar(`Excluir o hábito "${habito.nome}" e todo o histórico dele?`))) return;
-    estado.habitos = estado.habitos.filter((x) => x.id !== habito.id);
+    const { restantes, removidos } = retirar(estado.habitos, (x) => x.id === habito.id);
+    const registros = estado.registros[habito.id];
+    const notas = estado.notasHabito[habito.id];
+    const ligados = estado.rotinas.flatMap((r) => r.itens.filter((i) => i.habitoId === habito.id));
+    estado.habitos = restantes;
     delete estado.registros[habito.id];
     delete estado.notasHabito[habito.id];
     // Itens de rotina ligados a este hábito ficam sem ligação.
-    for (const rotina of estado.rotinas) {
-      for (const item of rotina.itens) if (item.habitoId === habito.id) item.habitoId = null;
-    }
+    for (const item of ligados) item.habitoId = null;
     salvar();
     fechar();
     redesenhar();
+    // Desfazer devolve o hábito, o histórico, as notas e as ligações dos itens que ainda existem.
+    avisarComDesfazer('Hábito excluído', () => {
+      estado.habitos = devolver(estado.habitos, removidos);
+      if (registros) estado.registros[habito.id] = registros;
+      if (notas) estado.notasHabito[habito.id] = notas;
+      for (const item of ligados) if (item.habitoId === null) item.habitoId = habito.id;
+      salvar();
+      redesenhar();
+    });
   };
 
   // Arquivar guarda o hábito e todo o histórico dele; só tira da grade.
@@ -623,7 +636,7 @@ function render(raiz) {
 
   // Quantos dias cabem: célula de 44 px (igual ao --cel do CSS), e o nome do
   // hábito fica com pelo menos 44% da largura. No Galaxy A36 isso dá 6 dias.
-  const largura = (raiz.clientWidth || window.innerWidth) - 18;
+  const largura = (raiz.clientWidth || window.innerWidth) - 20;
   const n = Math.max(3, Math.min(10, Math.floor((largura * 0.56) / 44)));
   const diaHoje = hoje(); // uma leitura do relógio por desenho: cabeçalho e células usam o mesmo dia
   const dias = Array.from({ length: n }, (_, i) => somaDias(diaHoje, -i));
@@ -694,6 +707,13 @@ function render(raiz) {
 
   clearTimeout(esperaSumir);
   if (vaiSumir) esperaSumir = setTimeout(redesenhar, SUMIR_MS);
+}
+
+// O Painel marca o hábito de hoje pelo mesmo caminho da grade: sim ou não vira feito na
+// hora; o numérico abre a folha da quantidade.
+export function marcarHabitoHoje(habito) {
+  if (habito.tipo === 'numero') pedirValor(habito, hoje());
+  else gravar(habito, hoje(), 'feito');
 }
 
 export const habitos = {

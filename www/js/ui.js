@@ -518,6 +518,14 @@ export function estadoVazio(titulo, dica, { compacto = false } = {}) {
 // Um aviso novo substitui o anterior, e com ele vai embora a ação que o anterior oferecia.
 const AVISO_MS = 4000;
 
+// Aviso com "Desfazer" depois de concluir ou excluir. desfazer põe tudo como estava
+// (e grava); o aviso some sozinho e a ação fica.
+export const DESFAZER_MS = 5000;
+
+export function avisarComDesfazer(texto, desfazer) {
+  avisar(texto, { duracao: DESFAZER_MS, acao: { rotulo: 'Desfazer', executar: desfazer } });
+}
+
 export function avisar(texto, { acao = null, duracao = AVISO_MS } = {}) {
   for (const anterior of document.querySelectorAll('.aviso')) anterior.remove();
   const el = h('div', { class: `aviso${acao ? ' com-acao' : ''}`, role: 'status' }, texto);
