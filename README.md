@@ -54,6 +54,8 @@ Depois acesse `http://localhost:8137` no Chrome do celular.
 
 ## Desenvolvimento
 
+Quem edita o quê, o fluxo de PR e as armadilhas conhecidas estão em [AGENTS.md](AGENTS.md).
+
 Fora o Capacitor, as dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
 o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado na máquina.
 
@@ -192,5 +194,5 @@ tools/                  servidor de desenvolvimento e portão de commits
 
 ## Próximos passos
 
-O roteiro está nas [issues](https://github.com/Dante-138/foco/issues) e nos
-[milestones](https://github.com/Dante-138/foco/milestones) do repositório.
+O roteiro está nas [issues](https://github.com/Dante-138/app-foco/issues) e nos
+[milestones](https://github.com/Dante-138/app-foco/milestones) do repositório.
