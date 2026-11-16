@@ -58,6 +58,8 @@ Depois acesse `http://localhost:8137` no Chrome do celular.
 
 ## Desenvolvimento
 
+Quem edita o quê, o fluxo de PR e as armadilhas conhecidas estão em [AGENTS.md](AGENTS.md).
+
 Fora o Capacitor, as dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
 o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado na máquina.
 
@@ -80,6 +82,12 @@ git config core.hooksPath .githooks
 Vale a pena porque commit enviado com mensagem fora do padrão não tem conserto simples: a
 `main` e os branches enviados não aceitam reescrita de histórico, então o jeito é refazer o
 branch com outro nome.
+
+O mesmo portão reprova nomes e dados que não podem ir para um repositório público, a partir de
+uma lista que nunca fica no repositório: um termo por linha em
+`~/.config/portao-de-qualidade/termos-proibidos.txt` (ou no arquivo de
+`ARQUIVO_TERMOS_PROIBIDOS`), e no CI o secret `TERMOS_PROIBIDOS`. Maiúscula e acento não
+contam, e o aviso diz só o número do termo na lista.
 
 ## APK Android
 
@@ -196,5 +204,5 @@ tools/                  servidor de desenvolvimento e portão de commits
 
 ## Próximos passos
 
-O roteiro está nas [issues](https://github.com/Dante-138/foco/issues) e nos
-[milestones](https://github.com/Dante-138/foco/milestones) do repositório.
+O roteiro está nas [issues](https://github.com/Dante-138/app-foco/issues) e nos
+[milestones](https://github.com/Dante-138/app-foco/milestones) do repositório.

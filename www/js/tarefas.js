@@ -7,6 +7,7 @@ import { diasEntre, hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
 import { agrupar, ordenar, quantoFalta, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
+import { devolver, retirar } from './nucleo/desfazer.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
 import { campoDeAvisos, novaConta } from './conta.js';
 import {
@@ -14,6 +15,7 @@ import {
   icone,
   abrirFolha,
   abrirMenu,
+  avisarComDesfazer,
   aoSegurar,
   confirmar,
   campo,
@@ -34,10 +36,12 @@ let esperaRedesenho = null;
 
 // Tarefa que se repete: ao concluir, nasce a próxima ocorrência, e a série segue nela.
 // A concluída fica no histórico sem a repetição, para reabrir não criar outra série.
+// Devolve o id da próxima, para o Desfazer poder tirá-la.
 function criarProximaOcorrencia(tarefa) {
+  const id = uid();
   estado.tarefas.push({
     ...tarefa,
-    id: uid(),
+    id,
     prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
     avisos: [...tarefa.avisos],
     feita: false,
@@ -45,24 +49,43 @@ function criarProximaOcorrencia(tarefa) {
     criadaEm: Date.now(),
   });
   tarefa.repeticao = null;
+  return id;
+}
+
+// Conclui e oferece o Desfazer: reabre a tarefa, devolve a repetição e tira a próxima
+// ocorrência que a conclusão criou.
+function marcarConcluida(tarefa) {
+  const repeticao = tarefa.repeticao;
+  tarefa.feita = true;
+  tarefa.feitaEm = Date.now();
+  const proxima = repeticao ? criarProximaOcorrencia(tarefa) : null;
+  salvar();
+  avisarComDesfazer('Tarefa concluída', () => {
+    tarefa.feita = false;
+    tarefa.feitaEm = null;
+    tarefa.repeticao = repeticao;
+    if (proxima) estado.tarefas = estado.tarefas.filter((t) => t.id !== proxima);
+    salvar();
+    redesenhar();
+  });
 }
 
 // Concluir sem a animação da lista: usado pelo painel. Tarefa que se repete gera a próxima.
 export function concluirTarefa(tarefa) {
   if (tarefa.feita) return;
-  tarefa.feita = true;
-  tarefa.feitaEm = Date.now();
-  if (tarefa.repeticao) criarProximaOcorrencia(tarefa);
+  marcarConcluida(tarefa);
   vibrar('concluido');
-  salvar();
   redesenhar();
 }
 
 function alternarFeita(tarefa, check) {
-  tarefa.feita = !tarefa.feita;
-  tarefa.feitaEm = tarefa.feita ? Date.now() : null;
-  if (tarefa.feita && tarefa.repeticao) criarProximaOcorrencia(tarefa);
-  salvar();
+  if (tarefa.feita) {
+    tarefa.feita = false;
+    tarefa.feitaEm = null;
+    salvar();
+  } else {
+    marcarConcluida(tarefa);
+  }
 
   const linhaNaTela = check.closest('.tarefa');
   if (!tarefa.feita) {
@@ -233,10 +256,16 @@ function editarTarefa(tarefa) {
 
   const excluir = async () => {
     if (!(await confirmar(`Excluir a tarefa "${tarefa.titulo}"?`))) return;
-    estado.tarefas = estado.tarefas.filter((t) => t.id !== tarefa.id);
+    const { restantes, removidos } = retirar(estado.tarefas, (t) => t.id === tarefa.id);
+    estado.tarefas = restantes;
     salvar();
     fechar();
     redesenhar();
+    avisarComDesfazer('Tarefa excluída', () => {
+      estado.tarefas = devolver(estado.tarefas, removidos);
+      salvar();
+      redesenhar();
+    });
   };
 
   // Folha no jeito do iPhone: Cancelar e Salvar na barra do topo, título grande e detalhes
@@ -365,11 +394,21 @@ async function excluirLista(lista) {
     quantas === 0 ? '' : quantas === 1 ? ' e a tarefa dela' : ` e as ${quantas} tarefas dela`;
   if (!(await confirmar(`Excluir a lista "${lista.nome}"${complemento}?`))) return;
 
-  estado.listas = estado.listas.filter((l) => l.id !== lista.id);
-  estado.tarefas = estado.tarefas.filter((t) => t.listaId !== lista.id);
+  const listas = retirar(estado.listas, (l) => l.id === lista.id);
+  const tarefasDaLista = retirar(estado.tarefas, (t) => t.listaId === lista.id);
+  const ativa = estado.listaAtiva;
+  estado.listas = listas.restantes;
+  estado.tarefas = tarefasDaLista.restantes;
   estado.listaAtiva = estado.listas[0].id;
   salvar();
   redesenhar();
+  avisarComDesfazer('Lista excluída', () => {
+    estado.listas = devolver(estado.listas, listas.removidos);
+    estado.tarefas = devolver(estado.tarefas, tarefasDaLista.removidos);
+    estado.listaAtiva = ativa;
+    salvar();
+    redesenhar();
+  });
 }
 
 // Ordem das tarefas pendentes. Vale para todas as listas e para a visão "com estrela".
@@ -401,9 +440,15 @@ async function excluirConcluidas(lista) {
   const quais = quantas === 1 ? 'a tarefa concluída' : `as ${quantas} tarefas concluídas`;
   if (!(await confirmar(`Excluir ${quais} da lista "${lista.nome}"?`))) return;
 
-  estado.tarefas = estado.tarefas.filter((t) => !daLista(t));
+  const { restantes, removidos } = retirar(estado.tarefas, daLista);
+  estado.tarefas = restantes;
   salvar();
   redesenhar();
+  avisarComDesfazer(quantas === 1 ? '1 tarefa excluída' : `${quantas} tarefas excluídas`, () => {
+    estado.tarefas = devolver(estado.tarefas, removidos);
+    salvar();
+    redesenhar();
+  });
 }
 
 // A ordem das listas na faixa do topo é a ordem em que estão guardadas.
