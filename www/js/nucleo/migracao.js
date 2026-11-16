@@ -2,7 +2,7 @@
 // A migração roda antes da validação (esquema.js) e recebe dados ainda não
 // conferidos, então cada passo precisa tolerar campos ausentes ou malformados.
 
-export const VERSAO = 10;
+export const VERSAO = 11;
 
 // A v1 guardava a cor do hábito como hexadecimal. A v2 guarda a chave da
 // paleta, para a cor acompanhar o tema claro ou escuro.
@@ -56,6 +56,9 @@ function v1ParaV2(dados) {
 // A v10 acrescenta as pausas (férias e feriados). Não há o que converter: sem o campo, não
 // há pausa nenhuma e as contas dos hábitos ficam como antes.
 
+// A v11 acrescenta as subtarefas da tarefa. Não há o que converter: sem o campo, a tarefa
+// não tem subtarefa nenhuma, como antes.
+
 // Cada passo sobe uma versão. Altera e devolve o próprio objeto.
 // Quem chama garante que dados.versao é um inteiro entre 1 e VERSAO.
 export function migrar(dados) {
@@ -71,5 +74,6 @@ export function migrar(dados) {
   if (dados.versao < 8) dados.versao = 8;
   if (dados.versao < 9) dados.versao = 9;
   if (dados.versao < 10) dados.versao = 10;
+  if (dados.versao < 11) dados.versao = 11;
   return dados;
 }

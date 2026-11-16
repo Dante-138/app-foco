@@ -31,7 +31,8 @@
 //                    repeticao: { cada, unidade } | null (só existe com prazo; ver repeticao.js),
 //                    avisos: [dias antes do prazo em que a tarefa também avisa] (só existe com
 //                    prazo; padrão: nenhum; ver lembretes.js),
-//                    estrela, feita, criadaEm, feitaEm: número | null }]
+//                    estrela, feita, criadaEm, feitaEm: número | null,
+//                    subtarefas: [{ id, titulo, feita }] (os passos da tarefa; padrão: nenhum) }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
 //   lembretes:    verdadeiro agenda as notificações do app (padrão: verdadeiro); desligado, nada avisa
 //   avisosDoDia:  { manha, noite, rotina, habitos }: quais avisos do dia estão ligados (padrão:
@@ -46,6 +47,7 @@ import { DIAS_DA_SEMANA, dataValida, diasValidos, horaValida } from './datas.js'
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
+import { LIMITE_DE_SUBTAREFAS } from './subtarefas.js';
 import { LIMITE_DE_PAUSAS, emOrdem } from './pausas.js';
 import { avisosDoDiaValidos } from './avisos-do-dia.js';
 import { avisosValidos } from './lembretes.js';
@@ -203,6 +205,19 @@ function sanearListas(valor, gerarId, avisos) {
   return listas.length ? listas : [{ id: gerarId(), nome: NOME_LISTA_PADRAO }];
 }
 
+// Subtarefas: id único dentro da tarefa e título com texto. Linha em branco sai sem aviso,
+// como o item em branco de uma rotina.
+function sanearSubtarefas(valor, avisos) {
+  return comIdUnico(valor, 'subtarefas', avisos)
+    .map((sub) => ({
+      id: sub.id,
+      titulo: cortar(sub.titulo, LIMITES.tituloTarefa),
+      feita: sub.feita === true,
+    }))
+    .filter((sub) => sub.titulo)
+    .slice(0, LIMITE_DE_SUBTAREFAS);
+}
+
 function sanearTarefas(valor, listas, avisos) {
   const idsDeLista = new Set(listas.map((l) => l.id));
   return comIdUnico(valor, 'tarefas', avisos).map((tarefa) => {
@@ -226,6 +241,7 @@ function sanearTarefas(valor, listas, avisos) {
       feita,
       criadaEm,
       feitaEm: feita ? (numeroValido(tarefa.feitaEm) ? tarefa.feitaEm : criadaEm) : null,
+      subtarefas: sanearSubtarefas(tarefa.subtarefas, avisos),
     };
   });
 }

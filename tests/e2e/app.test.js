@@ -200,7 +200,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 10);
+  assert.equal(salvo.versao, 11);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -1687,6 +1687,81 @@ test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e 
   assert.deepEqual(erros, []);
 });
 
+test('subtarefas: criar, marcar, editar e remover na folha da tarefa; a repetição leva todas por fazer', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const tarefas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  const resumo = (tarefa) => tarefa.subtarefas.map((s) => [s.titulo, s.feita]);
+  const nova = pagina.getByLabel('Nova subtarefa');
+  const salvar = async () => {
+    await botao(pagina, 'Salvar').click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+  const abrirTarefa = () => pagina.locator('.tarefa-corpo', { hasText: 'Viagem' }).first().click();
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Viagem');
+  // Enter acrescenta a subtarefa sem salvar a tarefa; o botão também; e o texto ainda no campo entra ao salvar.
+  await nova.fill('Comprar passagem');
+  await nova.press('Enter');
+  await visivel(pagina.getByRole('heading', { name: 'Nova tarefa' }));
+  await nova.fill('Reservar hotel');
+  await botao(pagina, 'Adicionar').click();
+  await nova.fill('  Fazer a mala  ');
+  await salvar();
+  await visivel(pagina.getByText('0 de 3 subtarefas'));
+  assert.deepEqual(resumo((await tarefas())[0]), [
+    ['Comprar passagem', false],
+    ['Reservar hotel', false],
+    ['Fazer a mala', false],
+  ]);
+
+  // Na folha: marcar uma, corrigir o texto de outra e remover a terceira.
+  await abrirTarefa();
+  await pagina.getByRole('checkbox', { name: 'Subtarefa feita: Comprar passagem' }).click();
+  await pagina.locator('dialog[open] .subtarefas input').nth(1).fill('Reservar o hotel');
+  await botao(pagina, 'Remover a subtarefa Fazer a mala').click();
+  await salvar();
+  await visivel(pagina.getByText('1 de 2 subtarefas'));
+  assert.deepEqual(resumo((await tarefas())[0]), [
+    ['Comprar passagem', true],
+    ['Reservar o hotel', false],
+  ]);
+
+  // Cancelar não grava o que foi mexido na lista.
+  await abrirTarefa();
+  await pagina.getByRole('checkbox', { name: 'Subtarefa feita: Reservar o hotel' }).click();
+  await botao(pagina, 'Cancelar').click();
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  assert.deepEqual(resumo((await tarefas())[0]), [
+    ['Comprar passagem', true],
+    ['Reservar o hotel', false],
+  ]);
+
+  // Tarefa que repete: ao concluir, a próxima ocorrência leva as subtarefas, todas por fazer.
+  await abrirTarefa();
+  await pagina.getByLabel('Repetir').selectOption('dia');
+  await salvar();
+  await pagina.getByRole('checkbox', { name: 'Concluir: Viagem' }).click();
+  await visivel(pagina.getByText('0 de 2 subtarefas'));
+  const [concluida, proxima] = await tarefas();
+  assert.deepEqual([concluida.feita, proxima.feita], [true, false]);
+  assert.deepEqual(resumo(concluida), [
+    ['Comprar passagem', true],
+    ['Reservar o hotel', false],
+  ]);
+  assert.deepEqual(resumo(proxima), [
+    ['Comprar passagem', false],
+    ['Reservar o hotel', false],
+  ]);
+  const idsDaConcluida = new Set(concluida.subtarefas.map((s) => s.id));
+  assert.equal(
+    proxima.subtarefas.some((s) => idsDaConcluida.has(s.id)),
+    false,
+  );
+  assert.deepEqual(erros, []);
+});
+
 // ------------------------------------------------------------ férias e feriados
 
 test('pausas: férias e feriados deixam os hábitos de folga e a sequência não quebra', async (t) => {
@@ -1980,6 +2055,8 @@ test('prazos: conta mensal com aviso antecipado, contagem regressiva e atrasada 
     [conta.prazo, conta.repeticao, conta.avisos, conta.listaId],
     ['2026-11-20', { cada: 1, unidade: 'mes' }, [1, 3], 'l'],
   );
+  // A conta nasce com a lista de subtarefas vazia: sem ela, a linha da tarefa quebraria.
+  assert.deepEqual(conta.subtarefas, []);
   // Avisa 3 dias antes, 1 dia antes, no dia e, se ficar pendente, na manhã seguinte.
   await agendados(titulo, ['17/11 09:00', '19/11 09:00', '20/11 09:00', '21/11 09:00']);
 
@@ -2836,7 +2913,7 @@ test('hábito com dias da semana: fora deles o dia vira folga sem gravar nada', 
 
   await visivel(botao(pagina, 'Leitura, hoje: folga'));
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 10);
+  assert.equal(salvo.versao, 11);
   assert.equal(salvo.habitos[0].diasDaSemana.length, 6);
   assert.equal(salvo.habitos[0].diasDaSemana.includes(hojeNaSemana), false);
   assert.deepEqual(salvo.registros.h ?? {}, {});

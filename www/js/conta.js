@@ -118,6 +118,7 @@ export function novaConta(listaId, nomeInicial = '') {
       feita: false,
       criadaEm: Date.now(),
       feitaEm: null,
+      subtarefas: [],
     });
     salvar();
     fechar();

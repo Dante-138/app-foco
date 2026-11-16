@@ -24,7 +24,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   faixa e excluir. Toda pendente com prazo mostra a contagem regressiva ("em 6 dias"); a
   atrasada fica em vermelho, com a data que tinha e há quanto venceu. "Nova conta mensal" (no
   menu da lista ou no atalho da tarefa nova) cria a conta já repetindo todo mês, com o valor
-  no título.
+  no título. Uma tarefa pode ter subtarefas: a linha mostra quantas estão feitas, e a tarefa
+  que repete leva as subtarefas, por fazer, para a próxima ocorrência.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
   se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.

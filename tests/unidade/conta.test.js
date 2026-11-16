@@ -69,6 +69,7 @@ test('a tarefa de uma conta passa pela validação sem correção', () => {
     feita: false,
     criadaEm: 1,
     feitaEm: null,
+    subtarefas: [],
   };
   const { estado, avisos } = sanear(
     { listas: [{ id: 'l', nome: 'Contas' }], tarefas: [tarefa] },

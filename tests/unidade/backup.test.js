@@ -53,6 +53,7 @@ function comDados() {
         feita: false,
         criadaEm: 1,
         feitaEm: null,
+        subtarefas: [{ id: 's', titulo: 'Revisar o capítulo 3', feita: true }],
       },
     ],
   };

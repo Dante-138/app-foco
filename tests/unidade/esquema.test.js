@@ -86,6 +86,10 @@ function valido() {
         feita: false,
         criadaEm: 1000,
         feitaEm: null,
+        subtarefas: [
+          { id: 's1', titulo: 'Capítulo 1', feita: true },
+          { id: 's2', titulo: 'Capítulo 2', feita: false },
+        ],
       },
       {
         id: 't2',
@@ -100,6 +104,7 @@ function valido() {
         feita: true,
         criadaEm: 2000,
         feitaEm: 3000,
+        subtarefas: [],
       },
     ],
     ordemTarefas: 'titulo',
@@ -517,8 +522,41 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
       feita: false,
       criadaEm: 0,
       feitaEm: null,
+      subtarefas: [],
     },
   ]);
+});
+
+test('subtarefas: id único na tarefa, título com texto, feita só com true; fora da lista vira vazio', () => {
+  const tarefa = (id, subtarefas) => ({ id, listaId: 'l1', titulo: 'T', subtarefas });
+  const { estado, avisos } = limpar({
+    listas: [{ id: 'l1', nome: 'L' }],
+    tarefas: [
+      tarefa('a', [
+        { id: 's1', titulo: '  Passagem  ', feita: true, lixo: 1 },
+        { id: 's2', titulo: 'Hotel', feita: 'sim' },
+        { id: 's3', titulo: '   ' },
+        { id: 's1', titulo: 'Repetida' },
+        { titulo: 'Sem id' },
+        { id: 's4', titulo: 'x'.repeat(LIMITES.tituloTarefa + 9) },
+      ]),
+      tarefa('b', 'uma coisa'),
+      tarefa('c', undefined),
+      tarefa(
+        'd',
+        Array.from({ length: 35 }, (_, i) => ({ id: `s${i}`, titulo: `Passo ${i}` })),
+      ),
+    ],
+  });
+  assert.deepEqual(estado.tarefas[0].subtarefas, [
+    { id: 's1', titulo: 'Passagem', feita: true },
+    { id: 's2', titulo: 'Hotel', feita: false },
+    { id: 's4', titulo: 'x'.repeat(LIMITES.tituloTarefa), feita: false },
+  ]);
+  assert.deepEqual([estado.tarefas[1].subtarefas, estado.tarefas[2].subtarefas], [[], []]);
+  assert.equal(estado.tarefas[3].subtarefas.length, 30);
+  // Avisos: a repetida, a sem id e o texto no lugar da lista. A linha em branco sai sem aviso.
+  assert.equal(avisos.length, 3);
 });
 
 test('avisos da tarefa: dias de 1 a 30, sem repetir e em ordem; sem prazo não há aviso', () => {
