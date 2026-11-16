@@ -7,9 +7,11 @@
 // estado = {
 //   versao:       número (sempre a versão atual)
 //   aba:          'rotinas' | 'habitos' | 'tarefas' | 'painel'
-//   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
+//   rotinas:      [{ id, nome, diasDaSemana: [0 a 6] (0 = domingo; dias em que a rotina abre sozinha;
+//                    vazio = nunca), itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
 //                    habitoId: id de um hábito existente | null (marcar o item marca o hábito) }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
+//   rotinaDoDiaEm: 'AAAA-MM-DD' | null   (dia em que a rotina do dia já foi aberta; ver rotina-do-dia.js)
 //   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente;
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
@@ -34,10 +36,9 @@
 // limite, cor desconhecida vira a padrão, tarefa de lista inexistente vai para
 // a primeira lista); o que não dá é descartado. Cada correção gera um aviso.
 
-import { dataValida, horaValida } from './datas.js';
+import { DIAS_DA_SEMANA, dataValida, diasValidos, horaValida } from './datas.js';
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
-import { TODOS_OS_DIAS } from './habito-calculo.js';
 import { repeticaoValida } from './repeticao.js';
 import { LIMITE_DE_SUBTAREFAS } from './subtarefas.js';
 
@@ -104,6 +105,7 @@ function sanearRotinas(valor, idsDeHabitos, avisos) {
   return comIdUnico(valor, 'rotinas', avisos).map((rotina) => ({
     id: rotina.id,
     nome: cortar(rotina.nome, LIMITES.nomeRotina) || 'Rotina',
+    diasDaSemana: diasValidos(rotina.diasDaSemana),
     itens: comIdUnico(rotina.itens, 'itens de rotina', avisos)
       .slice(0, LIMITES.itensPorRotina)
       .flatMap((item) => sanearItem(item, idsDeHabitos, avisos)),
@@ -127,13 +129,11 @@ function sanearHabitos(valor, avisos) {
   });
 }
 
-// Dias da semana (0 a 6, sem repetir, em ordem). Lista vazia ou inválida vale todos os dias.
+// Dias da semana do hábito (0 a 6, sem repetir, em ordem). Lista vazia ou inválida vale
+// todos os dias. Na rotina a mesma lista pode ficar vazia (ver sanearRotinas).
 function sanearDiasDaSemana(valor) {
-  if (!Array.isArray(valor)) return [...TODOS_OS_DIAS];
-  const dias = [...new Set(valor.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort(
-    (a, b) => a - b,
-  );
-  return dias.length ? dias : [...TODOS_OS_DIAS];
+  const dias = diasValidos(valor);
+  return dias.length ? dias : [...DIAS_DA_SEMANA];
 }
 
 const marcaValida = (v) => v === 'feito' || v === 'pulado' || numeroValido(v);
@@ -253,6 +253,7 @@ export function sanear(dados, { dia, gerarId }) {
     rotinaAtiva: rotinas.some((r) => r.id === dados.rotinaAtiva)
       ? dados.rotinaAtiva
       : (rotinas[0]?.id ?? null),
+    rotinaDoDiaEm: dataValida(dados.rotinaDoDiaEm) ? dados.rotinaDoDiaEm : null,
     marcasRotina: sanearMarcas(dados.marcasRotina, rotinas, dia),
     marcadosNoFim: dados.marcadosNoFim !== false,
     habitos,
