@@ -4,3 +4,4 @@ dist/
 .stryker-tmp/
 android/
 package-lock.json
+CHANGELOG.md

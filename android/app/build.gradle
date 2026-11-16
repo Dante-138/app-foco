@@ -16,8 +16,14 @@ if (arquivoDeAssinatura) {
 }
 
 // Sem assinatura, o Gradle geraria um APK de release que não instala. Melhor falhar cedo.
+// Exceção: -Pfoco.semAssinatura=true gera o APK sem assinar de propósito. É o build do CI da
+// release, que não tem nenhum segredo; outro job assina o arquivo depois (zipalign e apksigner).
+def semAssinatura = providers.gradleProperty('foco.semAssinatura').orNull == 'true'
 def pediuRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
-if (pediuRelease && !arquivoDeAssinatura) {
+if (semAssinatura && arquivoDeAssinatura) {
+    throw new GradleException('-Pfoco.semAssinatura=true e -Pfoco.assinatura não andam juntos')
+}
+if (pediuRelease && !arquivoDeAssinatura && !semAssinatura) {
     throw new GradleException('Build de release exige -Pfoco.assinatura=<arquivo de propriedades da assinatura>')
 }
 
@@ -43,8 +49,14 @@ android {
         applicationId "io.github.dante138.foco"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        // A versão é a do package.json; o release-please troca as duas a cada release (pela
+        // marca no fim da linha). O versionCode sai dela: 1.2.3 vira 10203, e cresce a cada
+        // versão nova, como o Android exige para atualizar sem desinstalar.
+        def versao = "0.1.0" // x-release-please-version
+        def (maior, menor, correcao) = versao.tokenize('.').collect { it.toInteger() }
+        if (menor > 99 || correcao > 99) throw new GradleException("Versão ${versao}: o versionCode só cabe com menor e correção até 99")
+        versionCode maior * 10000 + menor * 100 + correcao
+        versionName versao
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

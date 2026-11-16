@@ -143,6 +143,80 @@ A chave é a de depuração do runner e muda a cada rodada. Para instalar um APK
 outro, desinstale antes: `adb uninstall io.github.dante138.foco.pr` (só os dados de demonstração
 se perdem).
 
+## Releases
+
+A versão sai dos commits (Conventional Commits), pelo [release-please](https://github.com/googleapis/release-please):
+
+1. A cada merge na `main`, o workflow `Release` mantém um PR `chore: release x.y.z`, em
+   rascunho, com a versão nova no `package.json` e no `android/app/build.gradle` e o
+   `CHANGELOG.md` (Novidades, Correções, Desempenho). Antes da versão 1.0, `feat` sobe o número
+   do meio e `fix` o último.
+2. Esse PR segue o fluxo de qualquer outro: revisão, sai do rascunho, merge.
+3. No merge saem a tag `vX.Y.Z` e a release. O job `Construir APK` compila sem assinar e sem
+   nenhum segredo; o job `Assinar e publicar o APK` alinha e assina com a chave fixa, reprova se
+   o certificado não for o de `android/assinatura-sha256.txt`, atesta a proveniência (SLSA) e
+   anexa `foco-vX.Y.Z.apk`. Para conferir que o APK saiu deste repositório, deste commit:
+
+   ```bash
+   gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/app-foco
+   ```
+
+O `versionCode` do Android sai da versão (1.2.3 vira 10203), então cada release instala por
+cima da anterior sem apagar os dados.
+
+### Secrets da release (uma vez, pelo dono do repositório)
+
+Sem eles o workflow só avisa e termina verde. Nada disso é lido por agente nenhum.
+
+1. **Ambiente `release`**: em Settings, Environments, New environment, nome `release`. Em
+   Deployment branches and tags, escolha Selected branches and tags e acrescente só `main`.
+   Assim a chave do APK só fica disponível para workflow rodando na `main`.
+2. **Chave do APK, no ambiente `release`**. No PowerShell, na pasta das chaves:
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD/foco.jks")) | gh secret set FOCO_KEYSTORE_BASE64 --env release --repo Dante-138/app-foco
+   ```
+
+   Depois as três que o `gh` pergunta sem mostrar o que é digitado (os mesmos valores do
+   `assinatura.properties`):
+
+   ```bash
+   gh secret set FOCO_KEYSTORE_SENHA --env release --repo Dante-138/app-foco
+   ```
+
+   ```bash
+   gh secret set FOCO_CHAVE_ALIAS --env release --repo Dante-138/app-foco
+   ```
+
+   ```bash
+   gh secret set FOCO_CHAVE_SENHA --env release --repo Dante-138/app-foco
+   ```
+
+3. **`RELEASE_TOKEN`**, no repositório (não no ambiente): em GitHub, Settings, Developer
+   settings, Fine-grained tokens, crie um token só para o repositório `app-foco`, com Contents e
+   Pull requests em leitura e escrita, e validade de até um ano. Com o token padrão do workflow
+   o PR de release não dispararia o CI, e a proteção da `main` nunca o liberaria.
+
+   ```bash
+   gh secret set RELEASE_TOKEN --repo Dante-138/app-foco
+   ```
+
+4. **Impressão digital do certificado**, uma vez: o job que assina reprova se o APK sair com
+   outra chave, e compara com a linha que você pôs em `android/assinatura-sha256.txt` (a
+   impressão digital é pública). O build local já mostra a sua, no fim, depois de
+   "== Conferindo a assinatura":
+
+   ```bash
+   pwsh tools/apk.ps1 -AceitoLicencaAndroid -Tipo debug
+   ```
+
+   Copie o valor de `certificate SHA-256 digest` para o arquivo, numa linha sem `#`, e faça um PR.
+   Enquanto o arquivo não tiver uma impressão digital válida, a release sai sem APK e o job
+   falha com essa mensagem.
+
+5. Conferir: o próximo merge na `main` abre o PR de release. Quando o token vencer, o workflow
+   falha no passo do release-please; é só criar outro e repetir o passo 3.
+
 ## Portão de qualidade
 
 Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate` do CI verde.

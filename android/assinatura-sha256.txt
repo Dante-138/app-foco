@@ -1,0 +1,3 @@
+# Impressão digital SHA-256 do certificado de assinatura do APK (pública).
+# Preencher uma vez, com 64 caracteres hexadecimais (com ou sem dois-pontos), numa linha sem "#".
+# O job que assina a release reprova se o APK sair com outro certificado. Ver README, Releases.

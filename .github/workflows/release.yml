@@ -1,0 +1,193 @@
+name: Release
+
+# A cada merge na main, o release-please lê os commits (Conventional Commits) e mantém um PR
+# "chore: release x.y.z", em rascunho, com a versão nova e o CHANGELOG. Quando esse PR é mesclado,
+# ele cria a tag e a release. Depois, dois jobs entregam o APK: um compila sem assinar e sem
+# nenhum segredo; o outro só alinha, assina com a chave fixa, confere o certificado, atesta a
+# proveniência (SLSA: prova assinada de que o arquivo saiu deste workflow, deste commit) e anexa.
+# Conferir no PC: gh attestation verify foco-vX.Y.Z.apk --repo Dante-138/app-foco
+#
+# Secrets (o passo a passo para cadastrar está no README, em "Releases"):
+#   RELEASE_TOKEN  token fino, só deste repositório, com Contents e Pull requests em leitura e
+#                  escrita. Com o GITHUB_TOKEN padrão, o PR de release não dispara o CI (e não
+#                  passaria na proteção da main) e a tag criada não dispara workflow nenhum.
+#   FOCO_KEYSTORE_BASE64, FOCO_KEYSTORE_SENHA, FOCO_CHAVE_ALIAS, FOCO_CHAVE_SENHA
+#                  a chave fixa do APK, no ambiente "release", que só a main pode usar.
+# Sem RELEASE_TOKEN o workflow só avisa e termina verde; sem a chave, a release sai sem APK.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # o release-please escreve com o RELEASE_TOKEN, não com o token do workflow
+    outputs:
+      criada: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Conferir o token de release
+        id: token
+        env:
+          TEM_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+        run: |
+          echo "existe=$TEM_TOKEN" >> "$GITHUB_OUTPUT"
+          if [ "$TEM_TOKEN" != "true" ]; then
+            echo "::notice::Secret RELEASE_TOKEN ausente: release automática desligada (ver README, Releases)."
+          fi
+
+      - name: Atualizar o PR de release ou publicar a release
+        id: release
+        if: steps.token.outputs.existe == 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Compila o APK SEM assinar e sem nenhum segredo: este job roda o Gradle inteiro (plugins,
+  # Capacitor, wrapper), código que não é nosso, então não recebe a chave, nem token de
+  # escrita, nem OIDC. Só lê o repositório. O arquivo sai como artefato para o job seguinte.
+  construir:
+    name: Construir APK
+    needs: release
+    if: needs.release.outputs.criada == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+
+      # Sem cache do npm nem do Gradle: o build que vai para a release não pode reaproveitar um
+      # cache que um PR pode ter escrito (envenenamento de cache).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Preparar o app web
+        run: |
+          npm ci --ignore-scripts
+          npx cap sync android
+          node tools/carimbar-build.mjs
+
+      - name: Compilar o APK sem assinatura
+        working-directory: android
+        run: sh ./gradlew --no-daemon --console=plain assembleRelease -Pfoco.semAssinatura=true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apk-sem-assinatura
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # Só assina, confere, atesta e anexa. Não roda o Gradle nem script do projeto: o que roda aqui
+  # são o zipalign e o apksigner do Android SDK do runner, e o gh. A chave vem do ambiente
+  # "release", que só a main usa, e só aparece no passo que assina.
+  apk:
+    name: Assinar e publicar o APK
+    needs: [release, construir]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write # anexar o APK à release
+      id-token: write # assinar a atestação de proveniência (OIDC)
+      attestations: write # gravar a atestação
+      artifact-metadata: write # registrar o artefato atestado
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - name: Conferir a chave do APK
+        id: chave
+        env:
+          TEM_CHAVE: ${{ secrets.FOCO_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "existe=$TEM_CHAVE" >> "$GITHUB_OUTPUT"
+          if [ "$TEM_CHAVE" != "true" ]; then
+            echo "::warning::Chave do APK ausente no ambiente release: a release $TAG saiu sem APK."
+          fi
+
+      # Só para ler a impressão digital esperada, versionada em android/assinatura-sha256.txt.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.chave.outputs.existe == 'true'
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          sparse-checkout: android/assinatura-sha256.txt
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.chave.outputs.existe == 'true'
+        with:
+          name: apk-sem-assinatura
+
+      # A keystore e as senhas ficam na pasta temporária do runner e vão para o apksigner por
+      # arquivo e variável de ambiente, nunca na linha de comando. Tudo é apagado no fim do passo.
+      - name: Alinhar e assinar
+        if: steps.chave.outputs.existe == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FOCO_KEYSTORE_BASE64 }}
+          KEYSTORE_SENHA: ${{ secrets.FOCO_KEYSTORE_SENHA }}
+          CHAVE_ALIAS: ${{ secrets.FOCO_CHAVE_ALIAS }}
+          CHAVE_SENHA: ${{ secrets.FOCO_CHAVE_SENHA }}
+        run: |
+          ferramentas="$(dirname "$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)")"
+          chaves="$RUNNER_TEMP/chaves"
+          mkdir -m 700 "$chaves"
+          trap 'rm -rf "$chaves"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$chaves/foco.jks"
+          "$ferramentas/zipalign" -f -P 16 4 app-release-unsigned.apk "$chaves/alinhado.apk"
+          "$ferramentas/apksigner" sign \
+            --ks "$chaves/foco.jks" --ks-key-alias "$CHAVE_ALIAS" \
+            --ks-pass env:KEYSTORE_SENHA --key-pass env:CHAVE_SENHA \
+            --out "foco-$TAG.apk" "$chaves/alinhado.apk"
+
+      # Reprova se o certificado não for o esperado: outra chave não instala por cima dos APKs
+      # já instalados sem apagar os dados. A impressão digital é pública.
+      - name: Conferir a assinatura
+        if: steps.chave.outputs.existe == 'true'
+        run: |
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          esperada="$(sed '/^#/d' android/assinatura-sha256.txt | tr -d ':[:space:]' | tr 'A-F' 'a-f')"
+          if ! printf '%s' "$esperada" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::android/assinatura-sha256.txt não tem uma impressão digital SHA-256 válida (64 caracteres hexadecimais)."
+            exit 1
+          fi
+          obtida="$("$apksigner" verify --print-certs "foco-$TAG.apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr 'A-F' 'a-f')"
+          if [ "$obtida" != "$esperada" ]; then
+            echo "::error::O APK foi assinado com um certificado diferente do esperado (android/assinatura-sha256.txt). Nada foi publicado."
+            exit 1
+          fi
+          echo "Assinatura confere com a impressão digital versionada."
+
+      - name: Atestar a proveniência (SLSA)
+        if: steps.chave.outputs.existe == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: foco-${{ needs.release.outputs.tag }}.apk
+
+      - name: Anexar o APK à release
+        if: steps.chave.outputs.existe == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "foco-$TAG.apk" --repo "$GITHUB_REPOSITORY"
