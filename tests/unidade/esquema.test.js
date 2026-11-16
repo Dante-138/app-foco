@@ -45,6 +45,7 @@ function valido() {
         meta: null,
         arquivado: false,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: '21:30',
       },
       {
         id: 'h2',
@@ -55,12 +56,17 @@ function valido() {
         meta: 2,
         arquivado: true,
         diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+        lembrete: null,
       },
     ],
     registros: { h1: { '2026-11-12': 'feito', '2026-11-11': 'pulado' }, h2: { '2026-11-12': 1.5 } },
     notasHabito: { h1: { '2026-11-11': 'Viagem, sem livro' } },
     ocultarConcluidos: true,
     ocultarArquivados: false,
+    pausas: [
+      { id: 'p1', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' },
+      { id: 'p2', nome: 'Feriado', de: '2026-11-20', ate: '2026-11-20' },
+    ],
     listas: [
       { id: 'l1', nome: 'Faculdade' },
       { id: 'l2', nome: 'Pessoal' },
@@ -80,6 +86,10 @@ function valido() {
         feita: false,
         criadaEm: 1000,
         feitaEm: null,
+        subtarefas: [
+          { id: 's1', titulo: 'Capítulo 1', feita: true },
+          { id: 's2', titulo: 'Capítulo 2', feita: false },
+        ],
       },
       {
         id: 't2',
@@ -94,10 +104,12 @@ function valido() {
         feita: true,
         criadaEm: 2000,
         feitaEm: 3000,
+        subtarefas: [],
       },
     ],
     ordemTarefas: 'titulo',
     lembretes: false,
+    avisosDoDia: { manha: true, noite: false, rotina: true, habitos: false },
   };
 }
 
@@ -129,11 +141,13 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
+    pausas: [],
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
     listaAtiva: 'id-gerado',
     tarefas: [],
     ordemTarefas: 'data',
     lembretes: true,
+    avisosDoDia: { manha: true, noite: true, rotina: false, habitos: true },
   });
   assert.deepEqual(avisos, []);
 });
@@ -319,6 +333,7 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       meta: null,
       arquivado: false,
       diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+      lembrete: null,
     },
     {
       id: 'b',
@@ -329,8 +344,72 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
       meta: null,
       arquivado: false,
       diasDaSemana: [0, 1, 2, 3, 4, 5, 6],
+      lembrete: null,
     },
   ]);
+});
+
+test('pausas: só com as duas datas reais; datas trocadas entram em ordem; nome cortado ou padrão', () => {
+  const { estado, avisos } = limpar({
+    pausas: [
+      { id: 'a', nome: '  Férias  ', de: '2026-12-21', ate: '2027-01-03' },
+      { id: 'b', nome: 'Trocada', de: '2026-11-20', ate: '2026-11-18' },
+      { id: 'c', nome: '', de: '2026-11-20', ate: '2026-11-20' },
+      { id: 'd', nome: 'n'.repeat(LIMITES.nomePausa + 5), de: '2026-11-21', ate: '2026-11-21', lixo: 1 },
+      { id: 'e', nome: 'Sem fim', de: '2026-11-20' },
+      { id: 'f', nome: 'Data errada', de: '2026-02-30', ate: '2026-03-01' },
+      { id: 'a', nome: 'Repetida', de: '2026-11-20', ate: '2026-11-20' },
+      'texto',
+    ],
+  });
+  assert.deepEqual(estado.pausas, [
+    { id: 'a', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' },
+    { id: 'b', nome: 'Trocada', de: '2026-11-18', ate: '2026-11-20' },
+    { id: 'c', nome: 'Pausa', de: '2026-11-20', ate: '2026-11-20' },
+    { id: 'd', nome: 'n'.repeat(LIMITES.nomePausa), de: '2026-11-21', ate: '2026-11-21' },
+  ]);
+  assert.equal(avisos.length, 4); // duas com data inválida, a repetida e o texto
+  assert.deepEqual(limpar({ pausas: 'férias' }).estado.pausas, []);
+});
+
+test('pausas: ficam as primeiras até o limite', () => {
+  const muitas = Array.from({ length: 70 }, (_, i) => ({
+    id: `p${i}`,
+    nome: 'P',
+    de: '2026-11-20',
+    ate: '2026-11-20',
+  }));
+  const { estado } = limpar({ pausas: muitas });
+  assert.equal(estado.pausas.length, 60);
+  assert.equal(estado.pausas.at(-1).id, 'p59');
+});
+
+test('lembrete do hábito: só hora válida; o resto vira null', () => {
+  const { estado, avisos } = limpar({
+    habitos: [
+      { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', lembrete: '07:05' },
+      { id: 'b', nome: 'B', cor: 'rosa', tipo: 'simnao', lembrete: '24:00' },
+      { id: 'c', nome: 'C', cor: 'rosa', tipo: 'simnao', lembrete: '7:5' },
+      { id: 'd', nome: 'D', cor: 'rosa', tipo: 'simnao', lembrete: 730 },
+      { id: 'e', nome: 'E', cor: 'rosa', tipo: 'simnao' },
+    ],
+  });
+  assert.deepEqual(
+    estado.habitos.map((x) => x.lembrete),
+    ['07:05', null, null, null, null],
+  );
+  assert.deepEqual(avisos, []);
+});
+
+test('avisos do dia: a rotina no relógio nasce desligada, os outros ligados; campo estranho sai', () => {
+  const padrao = { manha: true, noite: true, rotina: false, habitos: true };
+  assert.deepEqual(limpar({}).estado.avisosDoDia, padrao);
+  assert.deepEqual(limpar({ avisosDoDia: 'sim' }).estado.avisosDoDia, padrao);
+  assert.deepEqual(limpar({ avisosDoDia: { noite: false, rotina: null, extra: 1 } }).estado.avisosDoDia, {
+    ...padrao,
+    noite: false,
+  });
+  assert.deepEqual(limpar({ avisosDoDia: { rotina: true } }).estado.avisosDoDia, { ...padrao, rotina: true });
 });
 
 test('hábito numérico: unidade cortada ou nula, meta inválida vira 1', () => {
@@ -443,8 +522,41 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
       feita: false,
       criadaEm: 0,
       feitaEm: null,
+      subtarefas: [],
     },
   ]);
+});
+
+test('subtarefas: id único na tarefa, título com texto, feita só com true; fora da lista vira vazio', () => {
+  const tarefa = (id, subtarefas) => ({ id, listaId: 'l1', titulo: 'T', subtarefas });
+  const { estado, avisos } = limpar({
+    listas: [{ id: 'l1', nome: 'L' }],
+    tarefas: [
+      tarefa('a', [
+        { id: 's1', titulo: '  Passagem  ', feita: true, lixo: 1 },
+        { id: 's2', titulo: 'Hotel', feita: 'sim' },
+        { id: 's3', titulo: '   ' },
+        { id: 's1', titulo: 'Repetida' },
+        { titulo: 'Sem id' },
+        { id: 's4', titulo: 'x'.repeat(LIMITES.tituloTarefa + 9) },
+      ]),
+      tarefa('b', 'uma coisa'),
+      tarefa('c', undefined),
+      tarefa(
+        'd',
+        Array.from({ length: 35 }, (_, i) => ({ id: `s${i}`, titulo: `Passo ${i}` })),
+      ),
+    ],
+  });
+  assert.deepEqual(estado.tarefas[0].subtarefas, [
+    { id: 's1', titulo: 'Passagem', feita: true },
+    { id: 's2', titulo: 'Hotel', feita: false },
+    { id: 's4', titulo: 'x'.repeat(LIMITES.tituloTarefa), feita: false },
+  ]);
+  assert.deepEqual([estado.tarefas[1].subtarefas, estado.tarefas[2].subtarefas], [[], []]);
+  assert.equal(estado.tarefas[3].subtarefas.length, 30);
+  // Avisos: a repetida, a sem id e o texto no lugar da lista. A linha em branco sai sem aviso.
+  assert.equal(avisos.length, 3);
 });
 
 test('avisos da tarefa: dias de 1 a 30, sem repetir e em ordem; sem prazo não há aviso', () => {

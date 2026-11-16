@@ -230,6 +230,7 @@ function render(raiz) {
     registros: estado.registros,
     tarefas: estado.tarefas,
     dia,
+    pausas: estado.pausas,
     hora: agoraLocal().slice(11),
   });
   const { tarefas: deHoje } = resumo;

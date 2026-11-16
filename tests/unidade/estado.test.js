@@ -22,11 +22,13 @@ test('estado inicial tem uma lista, nenhuma rotina e a data de hoje nas marcas',
     notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
+    pausas: [],
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
     listaAtiva: 'id-gerado',
     tarefas: [],
     ordemTarefas: 'data',
     lembretes: true,
+    avisosDoDia: { manha: true, noite: true, rotina: false, habitos: true },
   });
 });
 

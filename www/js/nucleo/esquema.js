@@ -16,9 +16,12 @@
 //                 os ids ficam na ordem em que os itens foram marcados)
 //   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
-//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos) }]
+//                    arquivado, diasDaSemana: [0 a 6] (0 = domingo; padrão: todos),
+//                    lembrete: 'HH:MM' | null (hora do aviso do hábito) }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
 //   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
+//   pausas:       [{ id, nome, de: 'AAAA-MM-DD', ate: 'AAAA-MM-DD' }]   (férias e feriados, datas
+//                 incluídas e em ordem; nesses dias todo hábito fica de folga; ver pausas.js)
 //   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
 //   ocultarArquivados: verdadeiro esconde da grade os hábitos arquivados (padrão: verdadeiro)
 //   listas:       [{ id, nome }]   (sempre pelo menos uma)
@@ -28,9 +31,12 @@
 //                    repeticao: { cada, unidade } | null (só existe com prazo; ver repeticao.js),
 //                    avisos: [dias antes do prazo em que a tarefa também avisa] (só existe com
 //                    prazo; padrão: nenhum; ver lembretes.js),
-//                    estrela, feita, criadaEm, feitaEm: número | null }]
+//                    estrela, feita, criadaEm, feitaEm: número | null,
+//                    subtarefas: [{ id, titulo, feita }] (os passos da tarefa; padrão: nenhum) }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
-//   lembretes:    verdadeiro agenda notificação para as tarefas com prazo (padrão: verdadeiro)
+//   lembretes:    verdadeiro agenda as notificações do app (padrão: verdadeiro); desligado, nada avisa
+//   avisosDoDia:  { manha, noite, rotina, habitos }: quais avisos do dia estão ligados (padrão:
+//                 todos menos a rotina; ver avisos-do-dia.js)
 // }
 //
 // Regra de correção: o que dá para aproveitar é corrigido (texto cortado no
@@ -41,6 +47,9 @@ import { DIAS_DA_SEMANA, dataValida, diasValidos, horaValida } from './datas.js'
 import { COR_PADRAO, corValida } from './paleta.js';
 import { VERSAO } from './migracao.js';
 import { repeticaoValida } from './repeticao.js';
+import { LIMITE_DE_SUBTAREFAS } from './subtarefas.js';
+import { LIMITE_DE_PAUSAS, emOrdem } from './pausas.js';
+import { avisosDoDiaValidos } from './avisos-do-dia.js';
 import { avisosValidos } from './lembretes.js';
 
 // Limites de tamanho: fonte única para a validação e para os campos da interface.
@@ -55,6 +64,7 @@ export const LIMITES = Object.freeze({
   tituloTarefa: 200,
   notasTarefa: 2000,
   notaHabito: 300,
+  nomePausa: 40,
 });
 
 // A primeira é a padrão. A ordem na barra de abas é a de js/app.js.
@@ -126,6 +136,7 @@ function sanearHabitos(valor, avisos) {
       meta: numerico ? (numeroValido(habito.meta) && habito.meta > 0 ? habito.meta : 1) : null,
       arquivado: habito.arquivado === true,
       diasDaSemana: sanearDiasDaSemana(habito.diasDaSemana),
+      lembrete: horaValida(habito.lembrete) ? habito.lembrete : null,
     };
   });
 }
@@ -171,6 +182,20 @@ function sanearNotasHabito(valor, habitos, avisos) {
   return notas;
 }
 
+// Pausas: só com as duas datas reais; datas trocadas são postas em ordem.
+function sanearPausas(valor, avisos) {
+  return comIdUnico(valor, 'pausas', avisos)
+    .slice(0, LIMITE_DE_PAUSAS)
+    .flatMap((pausa) => {
+      if (!dataValida(pausa.de) || !dataValida(pausa.ate)) {
+        avisos.push('pausa com data inválida, descartada');
+        return [];
+      }
+      const [de, ate] = emOrdem(pausa.de, pausa.ate);
+      return [{ id: pausa.id, nome: cortar(pausa.nome, LIMITES.nomePausa) || 'Pausa', de, ate }];
+    });
+}
+
 function sanearListas(valor, gerarId, avisos) {
   const listas = comIdUnico(valor, 'listas', avisos).map((lista) => ({
     id: lista.id,
@@ -178,6 +203,19 @@ function sanearListas(valor, gerarId, avisos) {
   }));
   // O app sempre tem pelo menos uma lista.
   return listas.length ? listas : [{ id: gerarId(), nome: NOME_LISTA_PADRAO }];
+}
+
+// Subtarefas: id único dentro da tarefa e título com texto. Linha em branco sai sem aviso,
+// como o item em branco de uma rotina.
+function sanearSubtarefas(valor, avisos) {
+  return comIdUnico(valor, 'subtarefas', avisos)
+    .map((sub) => ({
+      id: sub.id,
+      titulo: cortar(sub.titulo, LIMITES.tituloTarefa),
+      feita: sub.feita === true,
+    }))
+    .filter((sub) => sub.titulo)
+    .slice(0, LIMITE_DE_SUBTAREFAS);
 }
 
 function sanearTarefas(valor, listas, avisos) {
@@ -203,6 +241,7 @@ function sanearTarefas(valor, listas, avisos) {
       feita,
       criadaEm,
       feitaEm: feita ? (numeroValido(tarefa.feitaEm) ? tarefa.feitaEm : criadaEm) : null,
+      subtarefas: sanearSubtarefas(tarefa.subtarefas, avisos),
     };
   });
 }
@@ -249,6 +288,7 @@ export function sanear(dados, { dia, gerarId }) {
     notasHabito: sanearNotasHabito(dados.notasHabito, habitos, avisos),
     ocultarConcluidos: dados.ocultarConcluidos === true,
     ocultarArquivados: dados.ocultarArquivados !== false,
+    pausas: sanearPausas(dados.pausas, avisos),
     listas,
     listaAtiva:
       dados.listaAtiva === VISAO_ESTRELA || listas.some((l) => l.id === dados.listaAtiva)
@@ -257,6 +297,7 @@ export function sanear(dados, { dia, gerarId }) {
     tarefas: sanearTarefas(dados.tarefas, listas, avisos),
     ordemTarefas: ORDENS_TAREFAS.includes(dados.ordemTarefas) ? dados.ordemTarefas : ORDENS_TAREFAS[0],
     lembretes: dados.lembretes !== false,
+    avisosDoDia: avisosDoDiaValidos(dados.avisosDoDia),
   };
   return { estado, avisos };
 }

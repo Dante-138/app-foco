@@ -38,15 +38,18 @@ function resumoDaRotina(rotina, marcadas, hora) {
 }
 
 // rotina: a rotina aberta (ou null); marcadas: Set com os ids marcados hoje nela.
-// dia: hoje, 'AAAA-MM-DD'; hora: agora, 'HH:MM'.
+// dia: hoje, 'AAAA-MM-DD'; hora: agora, 'HH:MM'; pausas: as férias e feriados do estado
+// (sem elas, nenhum dia é de pausa).
 //   rotina:  itens feitos e total, os próximos itens e onde o relógio está (ver acima)
-//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito) tira da conta
+//   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito, ou de pausa) tira da conta
 //   emRisco: hábitos cuja sequência acaba hoje se ficarem em branco (ver em-risco.js)
 //   tarefas: pendentes com prazo até hoje (as atrasadas primeiro), e quantas estão atrasadas
-export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia, hora }) {
-  const contam = habitos.filter((x) => !x.arquivado && valorDoDia(x, registros[x.id], dia) !== 'pulado');
+export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia, hora, pausas = [] }) {
+  const contam = habitos.filter(
+    (x) => !x.arquivado && valorDoDia(x, registros[x.id], dia, pausas) !== 'pulado',
+  );
   const paraHoje = tarefas.filter((t) => !t.feita && t.prazo && t.prazo <= dia).sort(porPrazo);
-  const emRisco = sequenciasEmRisco(habitos, registros, dia);
+  const emRisco = sequenciasEmRisco(habitos, registros, dia, pausas);
 
   return {
     rotina: resumoDaRotina(rotina, marcadas, hora),
