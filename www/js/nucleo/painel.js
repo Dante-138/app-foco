@@ -1,6 +1,7 @@
 // Resumo do dia para a aba Painel: rotina aberta, hábitos e tarefas de hoje.
 // Lógica pura: recebe os dados, a data e a hora, devolve só números e listas curtas.
 
+import { deIso } from './datas.js';
 import { cumprido, valorDoDia } from './habito-calculo.js';
 import { porPrazo } from './prazos.js';
 import { horarioDaRotina } from './rotina-horario.js';
@@ -43,17 +44,34 @@ function resumoDaRotina(rotina, marcadas, hora) {
 //   habitos: os não arquivados; pular o dia (ou ser dia de folga do hábito) tira da conta
 //   emRisco: hábitos cuja sequência acaba hoje se ficarem em branco (ver em-risco.js)
 //   tarefas: pendentes com prazo até hoje (as atrasadas primeiro), e quantas estão atrasadas
+//   eixos:   os três eixos do dia, cada um { chave, nome, feitos, total } (total 0: nada pedido hoje)
+//            Disciplina = hábitos cumpridos entre os que o dia pede;
+//            Execução   = itens marcados da rotina aberta;
+//            Entrega    = das tarefas com prazo até hoje, as concluídas hoje contra essas mais as pendentes
 export function resumoDoDia({ rotina, marcadas, habitos, registros, tarefas, dia, hora }) {
   const contam = habitos.filter((x) => !x.arquivado && valorDoDia(x, registros[x.id], dia) !== 'pulado');
   const paraHoje = tarefas.filter((t) => !t.feita && t.prazo && t.prazo <= dia).sort(porPrazo);
   const emRisco = sequenciasEmRisco(habitos, registros, dia);
 
+  const daRotina = resumoDaRotina(rotina, marcadas, hora);
+  const dosHabitos = {
+    feitos: contam.filter((x) => cumprido(x, registros[x.id]?.[dia])).length,
+    total: contam.length,
+  };
+  // Concluída hoje: a marca de conclusão (em milissegundos) é de hoje, no fuso do aparelho.
+  const inicioDoDia = deIso(dia).getTime();
+  const entregues = tarefas.filter(
+    (t) => t.feita && t.prazo && t.prazo <= dia && t.feitaEm >= inicioDoDia,
+  ).length;
+
   return {
-    rotina: resumoDaRotina(rotina, marcadas, hora),
-    habitos: {
-      feitos: contam.filter((x) => cumprido(x, registros[x.id]?.[dia])).length,
-      total: contam.length,
-    },
+    rotina: daRotina,
+    habitos: dosHabitos,
+    eixos: [
+      { chave: 'disciplina', nome: 'Disciplina', ...dosHabitos },
+      { chave: 'execucao', nome: 'Execução', feitos: daRotina.feitos, total: daRotina.total },
+      { chave: 'entrega', nome: 'Entrega', feitos: entregues, total: entregues + paraHoje.length },
+    ],
     emRisco: { total: emRisco.length, primeiras: emRisco.slice(0, EM_RISCO_NO_PAINEL) },
     tarefas: {
       total: paraHoje.length,

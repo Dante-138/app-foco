@@ -1573,9 +1573,21 @@ test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e 
     'Arrumar a cama',
   ]);
 
+  // Os três eixos do dia: hábitos (1 de 2), rotina (0 de 4) e tarefas com prazo até hoje (0 de 2).
+  const eixo = (nome) => pagina.getByRole('img', { name: new RegExp(`^${nome}: `) });
+  const barra = (nome) =>
+    eixo(nome)
+      .locator('.progresso-barra')
+      .evaluate((el) => el.style.transform);
+  assert.equal(await eixo('Disciplina').getAttribute('aria-label'), 'Disciplina: 1 de 2');
+  assert.equal(await eixo('Execução').getAttribute('aria-label'), 'Execução: 0 de 4');
+  assert.equal(await eixo('Entrega').getAttribute('aria-label'), 'Entrega: 0 de 2');
+  assert.deepEqual([await barra('Disciplina'), await barra('Execução')], ['scaleX(0.5)', 'scaleX(0)']);
+
   // Marcar um item ali mesmo anda o anel e vale na aba Rotinas.
   await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
   await visivel(pagina.getByRole('img', { name: '25% da rotina feita' }));
+  await visivel(pagina.getByRole('img', { name: 'Execução: 1 de 4' }));
   assert.deepEqual(await pagina.locator('.painel-bloco .rotina-texto').allTextContents(), [
     'Beber água',
     'Arrumar a cama',
@@ -1590,6 +1602,9 @@ test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e 
     ESPERA,
   );
   assert.equal(await contador('Tarefas').textContent(), '1');
+  // A tarefa concluída agora conta como entregue: uma de duas.
+  await visivel(pagina.getByRole('img', { name: 'Entrega: 1 de 2' }));
+  assert.equal(await barra('Entrega'), 'scaleX(0.5)');
 
   // O + do painel cria tarefa; "Ver rotina completa" leva à aba Rotinas.
   assert.equal(await pagina.locator('#fab').getAttribute('aria-label'), 'Nova tarefa');

@@ -1404,6 +1404,35 @@ li.mudando-de-area.saindo {
   color: var(--texto-2);
 }
 
+/* Os três eixos do dia (Disciplina, Execução, Entrega): nome, contagem e barra. */
+.painel-eixos {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.painel-eixo {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.painel-eixo-nome {
+  font-weight: 600;
+}
+
+.painel-eixo-valor {
+  font-size: 13px;
+  color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.painel-eixo .progresso {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 /* Quanto falta para o próximo item com horário ("em 40 min"), no fim da linha. */
 .painel-falta {
   flex: none;

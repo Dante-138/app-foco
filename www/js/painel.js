@@ -167,6 +167,32 @@ function blocoDasSequencias(resumo) {
   );
 }
 
+// Os três eixos do dia, cada um com a contagem e uma barra: Disciplina (hábitos), Execução
+// (rotina) e Entrega (tarefas com prazo até hoje). Eixo sem nada pedido hoje fica com a barra vazia.
+function blocoDosEixos(eixos) {
+  return h(
+    'section',
+    { class: 'cartao painel-bloco painel-eixos' },
+    eixos.map(({ nome, feitos, total }) => {
+      const valor = total ? `${feitos} de ${total}` : 'nada para hoje';
+      return h(
+        'div',
+        { class: 'painel-eixo', role: 'img', 'aria-label': `${nome}: ${valor}` },
+        h('span', { class: 'painel-eixo-nome' }, nome),
+        h('span', { class: 'painel-eixo-valor' }, valor),
+        h(
+          'div',
+          { class: 'progresso' },
+          h('div', {
+            class: 'progresso-barra',
+            style: { transform: `scaleX(${total ? feitos / total : 0})` },
+          }),
+        ),
+      );
+    }),
+  );
+}
+
 function blocoDasTarefas(resumo, dia) {
   if (!resumo.total) return null;
   return h(
@@ -234,6 +260,7 @@ function render(raiz) {
   const blocos = [
     h('p', { class: 'painel-data' }, fmtDia.format(new Date())),
     blocoDaRotina(rotina, resumo.rotina),
+    blocoDosEixos(resumo.eixos),
     h(
       'div',
       { class: 'painel-contadores' },

@@ -25,6 +25,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em
   risco (hábitos que vêm de dois dias seguidos ou mais e ainda estão em branco hoje) aparecem
   num bloco próprio, e dá para marcar ali.
+  Três barras resumem o dia: Disciplina (hábitos), Execução (rotina) e Entrega (tarefas com
+  prazo até hoje).
 - **Gestos**: deslizar o dedo para o lado troca de aba, na ordem da barra: Painel, Hábitos,
   Rotinas, Tarefas. O app abre na última aba usada; na primeira vez, em Rotinas.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.

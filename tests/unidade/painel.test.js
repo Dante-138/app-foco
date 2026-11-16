@@ -19,6 +19,11 @@ test('sem nada, tudo zera', () => {
   assert.deepEqual(resumoDoDia(vazio), {
     rotina: { feitos: 0, total: 0, proximos: [], agora: null, depois: null, atrasados: 0 },
     habitos: { feitos: 0, total: 0 },
+    eixos: [
+      { chave: 'disciplina', nome: 'Disciplina', feitos: 0, total: 0 },
+      { chave: 'execucao', nome: 'Execução', feitos: 0, total: 0 },
+      { chave: 'entrega', nome: 'Entrega', feitos: 0, total: 0 },
+    ],
     emRisco: { total: 0, primeiras: [] },
     tarefas: { total: 0, atrasadas: 0, primeiras: [] },
   });
@@ -167,4 +172,48 @@ test('hábitos: fora dos dias da semana do hábito, ele sai da conta do dia', ()
     dia: '2026-11-14',
   });
   assert.deepEqual(r.habitos, { feitos: 1, total: 1 });
+});
+
+// ------------------------------------------------------------- os três eixos
+
+test('eixos: Disciplina conta os hábitos pedidos, Execução a rotina e Entrega as tarefas com prazo até hoje', () => {
+  // HOJE é 13/11/2026; a meia-noite local dele, em milissegundos, separa o que foi concluído hoje.
+  const meiaNoite = new Date(2026, 10, 13).getTime();
+  const tarefa = (prazo, extra = {}) => ({
+    titulo: 't',
+    prazo,
+    hora: null,
+    feita: false,
+    criadaEm: 1,
+    ...extra,
+  });
+  const feita = (prazo, feitaEm) => tarefa(prazo, { feita: true, feitaEm });
+  const { eixos } = resumoDoDia({
+    ...vazio,
+    rotina: { itens: [secao('MANHÃ'), item('a'), item('b'), item('c'), item('d')] },
+    marcadas: new Set(['a', 'b', 'c']),
+    habitos: [
+      { id: 'feito', tipo: 'simnao', arquivado: false },
+      { id: 'falta', tipo: 'simnao', arquivado: false },
+      { id: 'folga', tipo: 'simnao', arquivado: false },
+      { id: 'velho', tipo: 'simnao', arquivado: true },
+    ],
+    registros: { feito: { [HOJE]: 'feito' }, folga: { [HOJE]: 'pulado' }, velho: { [HOJE]: 'feito' } },
+    tarefas: [
+      tarefa(HOJE), // pendente para hoje
+      tarefa('2026-11-10'), // pendente atrasada
+      tarefa('2026-11-20'), // futura: não entra
+      tarefa(null), // sem data: não entra
+      feita(HOJE, meiaNoite + 3_600_000), // concluída hoje, com prazo de hoje
+      feita('2026-11-10', meiaNoite), // atrasada concluída hoje, no primeiro instante do dia
+      feita(HOJE, meiaNoite - 1), // concluída ontem: não entra
+      feita('2026-11-20', meiaNoite + 1), // adiantada, com prazo futuro: não entra
+      feita(null, meiaNoite + 1), // sem data: não entra
+    ],
+  });
+  assert.deepEqual(eixos, [
+    { chave: 'disciplina', nome: 'Disciplina', feitos: 1, total: 2 },
+    { chave: 'execucao', nome: 'Execução', feitos: 3, total: 4 },
+    { chave: 'entrega', nome: 'Entrega', feitos: 2, total: 4 },
+  ]);
 });
