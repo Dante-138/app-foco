@@ -112,6 +112,23 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
+### APK de PR
+
+Todo pull request ganha um APK para testar no celular antes do merge: o job `Android` anexa
+`foco-pr-N.apk` à rodada do CI (aba Checks do PR, Artifacts; fica 7 dias). É um app à parte,
+"Foco PR" (`io.github.dante138.foco.pr`), que instala ao lado do app de verdade e não toca nos
+dados dele. Abre com dados de demonstração (`tools/dados-de-demonstracao.mjs`): rotinas,
+hábitos com dois meses de histórico e tarefas com prazo, tudo inventado e com datas relativas
+ao dia do build. É o app certo para tirar print de PR.
+
+```bash
+gh run download --repo Dante-138/app-foco --name foco-pr-N
+```
+
+A chave é a de depuração do runner e muda a cada rodada. Para instalar um APK de PR por cima de
+outro, desinstale antes: `adb uninstall io.github.dante138.foco.pr` (só os dados de demonstração
+se perdem).
+
 ## Portão de qualidade
 
 Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate` do CI verde.
