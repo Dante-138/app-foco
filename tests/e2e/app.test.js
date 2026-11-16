@@ -1031,7 +1031,7 @@ test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazi
 
   // Segurar, escolher Feito e escrever a nota: um Salvar grava os dois.
   await segurar(botao(pagina, 'Leitura, hoje: não feito'));
-  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Leitura (hoje)' }));
   assert.equal(await marcada('Vazio'), 'true');
   await opcao('Feito').click();
   await pagina.getByLabel('Nota do dia').fill('Li no ônibus');
@@ -1057,12 +1057,12 @@ test('hábito: a folha do dia grava o estado e a nota juntos (feito, folga, vazi
 
   // Hábito numérico: quantidade no lugar de Feito. Texto que não é número não salva.
   await segurar(botao(pagina, 'Água, hoje: 0 copos'));
-  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Água (hoje)' }));
   assert.equal(await marcada('Vazio'), 'true');
   await opcao('Quantidade').click();
   await pagina.getByLabel('Quantidade (copos)').fill('muitos');
   await botao(pagina, 'Salvar').click();
-  await visivel(pagina.getByRole('heading', { name: 'Água (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Água (hoje)' }));
   await pagina.getByLabel('Quantidade (copos)').fill('8');
   await botao(pagina, 'Salvar').click();
   await visivel(botao(pagina, 'Água, hoje: 8 copos'));
@@ -1080,7 +1080,7 @@ test('hábito: segurar a célula abre a nota do dia, sem mudar a marca; o ponto 
   await botao(pagina, 'Salvar').click();
 
   await segurar(botao(pagina, 'Leitura, hoje: não feito'));
-  await visivel(pagina.getByRole('heading', { name: 'Leitura (hoje)' }));
+  await visivel(pagina.getByRole('dialog', { name: 'Leitura (hoje)' }));
   await pagina.getByLabel('Nota do dia').fill('  Dia de viagem  ');
   await botao(pagina, 'Salvar').click();
 
