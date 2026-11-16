@@ -79,6 +79,12 @@ Vale a pena porque commit enviado com mensagem fora do padrão não tem conserto
 `main` e os branches enviados não aceitam reescrita de histórico, então o jeito é refazer o
 branch com outro nome.
 
+O mesmo portão reprova nomes e dados que não podem ir para um repositório público, a partir de
+uma lista que nunca fica no repositório: um termo por linha em
+`~/.config/portao-de-qualidade/termos-proibidos.txt` (ou no arquivo de
+`ARQUIVO_TERMOS_PROIBIDOS`), e no CI o secret `TERMOS_PROIBIDOS`. Maiúscula e acento não
+contam, e o aviso diz só o número do termo na lista.
+
 ## APK Android
 
 O app é empacotado com o Capacitor (pasta `android/`). O APK é compilado dentro do Docker:
