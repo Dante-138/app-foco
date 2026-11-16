@@ -43,6 +43,11 @@ jobs:
           BASE: origin/${{ github.base_ref }}
         run: node tools/verificar-commits.mjs "$BASE"
 
+      # test.only, .skip, "c8 ignore", "Stryker disable", eslint-disable e afins: desligam um
+      # portão sem mudar a configuração dele.
+      - name: Rotas de fuga
+        run: npm run escapes
+
       - name: Lint (zero avisos)
         run: npm run lint
 

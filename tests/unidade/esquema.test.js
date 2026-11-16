@@ -75,6 +75,7 @@ function valido() {
         prazo: '2026-11-26',
         hora: '19:30',
         repeticao: { cada: 2, unidade: 'semana' },
+        avisos: [1, 3, 7],
         estrela: true,
         feita: false,
         criadaEm: 1000,
@@ -88,6 +89,7 @@ function valido() {
         prazo: null,
         hora: null,
         repeticao: null,
+        avisos: [],
         estrela: false,
         feita: true,
         criadaEm: 2000,
@@ -436,12 +438,33 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
       prazo: null,
       hora: null,
       repeticao: null,
+      avisos: [],
       estrela: false,
       feita: false,
       criadaEm: 0,
       feitaEm: null,
     },
   ]);
+});
+
+test('avisos da tarefa: dias de 1 a 30, sem repetir e em ordem; sem prazo não há aviso', () => {
+  const tarefa = (id, extra) => ({ id, listaId: 'l1', titulo: 'T', prazo: '2026-11-26', ...extra });
+  const { estado, avisos } = limpar({
+    listas: [{ id: 'l1', nome: 'L' }],
+    tarefas: [
+      tarefa('a', { avisos: [7, 1, 3, 3, 0, 31, -2, 1.5, '3', null] }),
+      tarefa('b', { avisos: 'três dias' }),
+      tarefa('c', { avisos: { 0: 3 } }),
+      tarefa('d'),
+      tarefa('e', { avisos: [1, 3], prazo: null }),
+      tarefa('f', { avisos: [30, 1] }),
+    ],
+  });
+  assert.deepEqual(
+    estado.tarefas.map((t) => t.avisos),
+    [[1, 3, 7], [], [], [], [], [1, 30]],
+  );
+  assert.deepEqual(avisos, []);
 });
 
 test('tarefa concluída sem data de conclusão válida usa a data de criação', () => {

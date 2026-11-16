@@ -1,6 +1,6 @@
 // Ordenação e agrupamento das tarefas por prazo.
 
-import { deIso, somaDias } from './datas.js';
+import { deIso, diasEntre, somaDias } from './datas.js';
 
 const fmtCurta = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
 const fmtComAno = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -9,6 +9,16 @@ const fmtComAno = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'sho
 export function rotuloData(iso, dia) {
   const data = deIso(iso);
   return data.getFullYear() === deIso(dia).getFullYear() ? fmtCurta.format(data) : fmtComAno.format(data);
+}
+
+// Contagem regressiva de um prazo: "hoje", "amanhã", "em 5 dias". Depois de vencer, há
+// quanto tempo: "venceu ontem", "venceu há 3 dias". A data da tarefa não muda.
+export function quantoFalta(prazo, dia) {
+  const dias = diasEntre(dia, prazo);
+  if (dias === 0) return 'hoje';
+  if (dias === 1) return 'amanhã';
+  if (dias > 1) return `em ${dias} dias`;
+  return dias === -1 ? 'venceu ontem' : `venceu há ${-dias} dias`;
 }
 
 // No mesmo dia: as com horário primeiro, na ordem do relógio; depois as sem horário.

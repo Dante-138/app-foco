@@ -3,12 +3,13 @@
 
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
-import { hoje, somaDias } from './nucleo/datas.js';
+import { diasEntre, hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
-import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
+import { agrupar, ordenar, quantoFalta, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
 import { devolver, retirar } from './nucleo/desfazer.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
+import { campoDeAvisos, novaConta } from './conta.js';
 import {
   h,
   icone,
@@ -42,6 +43,7 @@ function criarProximaOcorrencia(tarefa) {
     ...tarefa,
     id,
     prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
+    avisos: [...tarefa.avisos],
     feita: false,
     feitaEm: null,
     criadaEm: Date.now(),
@@ -184,6 +186,7 @@ function editarTarefa(tarefa) {
   const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
 
   const repetir = camposDeRepeticao(tarefa);
+  const avisar = campoDeAvisos(tarefa?.avisos ?? []);
   const lista = h(
     'select',
     { class: 'entrada' },
@@ -200,9 +203,10 @@ function editarTarefa(tarefa) {
         onclick: () => {
           prazo.value = valor;
           if (!valor) {
-            // sem data não há horário nem repetição
+            // sem data não há horário, repetição nem aviso antecipado
             hora.value = '';
             repetir.limpar();
+            avisar.limpar();
           }
         },
       },
@@ -219,13 +223,15 @@ function editarTarefa(tarefa) {
     }
 
     const repeticao = repetir.ler();
+    const avisos = avisar.ler();
     const dados = {
       titulo: tituloFinal,
       notas: notas.value.trim(),
-      // Horário ou repetição sem data valem a partir de hoje, como no Google Tasks.
-      prazo: prazo.value || (hora.value || repeticao ? hoje() : null),
+      // Horário, repetição ou aviso sem data valem a partir de hoje, como no Google Tasks.
+      prazo: prazo.value || (hora.value || repeticao || avisos.length ? hoje() : null),
       hora: hora.value || null,
       repeticao,
+      avisos,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
     };
@@ -275,6 +281,21 @@ function editarTarefa(tarefa) {
       atalho('Hoje', hoje()),
       atalho('Amanhã', somaDias(hoje(), 1)),
       atalho('Sem data', ''),
+      // Só ao criar: troca esta folha pela da conta mensal, levando o título já digitado.
+      tarefa
+        ? null
+        : h(
+            'button',
+            {
+              type: 'button',
+              class: 'chip fantasma',
+              onclick: () => {
+                fechar();
+                novaConta(lista.value || listaPadrao, titulo.value.trim());
+              },
+            },
+            'Conta mensal',
+          ),
     ),
     h(
       'div',
@@ -283,6 +304,7 @@ function editarTarefa(tarefa) {
       repetir.campoCada,
       estado.listas.length > 1 ? linhaCampo('Lista', lista) : null,
     ),
+    avisar.elemento,
     tarefa
       ? h(
           'div',
@@ -444,6 +466,7 @@ function menuLista(lista) {
   const posicao = estado.listas.indexOf(lista);
   abrirMenu(lista.nome, [
     { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
+    { rotulo: 'Nova conta mensal', acao: () => novaConta(lista.id) },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
     { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverLista(lista, -1) },
     {
@@ -468,18 +491,29 @@ function menuLista(lista) {
 
 // --------------------------------------------------------------- desenho
 
-// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
-function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
-  const detalhes = [];
-  // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
-  const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
-  const quando = [
-    mostrarData ? rotuloData(tarefa.prazo, hoje()) : null,
+// Data, horário, contagem e repetição em uma linha só: "sex., 20 de nov., 14:30, em 6 dias,
+// repete todo mês". A data só aparece quando o grupo não diz o dia (atrasada, concluída ou
+// ordem que não é por data). A contagem regressiva vale para toda pendente com prazo, menos
+// nos grupos Hoje e Amanhã, em que o título do grupo já diz; na atrasada, é há quanto venceu.
+function textoDoPrazo(tarefa, { atrasada, comPrazo }) {
+  if (!tarefa.prazo) return '';
+  const dia = hoje();
+  const mostrarData = atrasada || tarefa.feita || comPrazo;
+  const mostrarFalta = !tarefa.feita && (atrasada || comPrazo || diasEntre(dia, tarefa.prazo) > 1);
+  return [
+    mostrarData ? rotuloData(tarefa.prazo, dia) : null,
     tarefa.hora,
+    mostrarFalta ? quantoFalta(tarefa.prazo, dia) : null,
     tarefa.repeticao ? `repete ${descrever(tarefa.repeticao)}` : null,
   ]
     .filter(Boolean)
     .join(', ');
+}
+
+// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
+function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
+  const detalhes = [];
+  const quando = textoDoPrazo(tarefa, { atrasada, comPrazo });
   if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
