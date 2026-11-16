@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TODOS_OS_DIAS,
   cumprido,
   formatar,
   lerNumero,
@@ -243,7 +242,7 @@ test('pontuação de sim ou não: marca que não é "feito" nem "pulado" conta c
 
 // 09/11/2026 é segunda; 14 é sábado e 15, domingo.
 const UTEIS = { id: 'u', tipo: 'simnao', diasDaSemana: [1, 2, 3, 4, 5] };
-const TODO_DIA = { id: 't', tipo: 'simnao', diasDaSemana: [...TODOS_OS_DIAS] };
+const TODO_DIA = { id: 't', tipo: 'simnao', diasDaSemana: [0, 1, 2, 3, 4, 5, 6] };
 const SEMANA = Object.fromEntries(
   ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'].map((d) => [d, 'feito']),
 );

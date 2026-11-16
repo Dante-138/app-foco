@@ -5,7 +5,7 @@ import { hoje } from './nucleo/datas.js';
 import { PROBLEMA } from './nucleo/estado.js';
 import { passoDoDeslize, vizinha } from './nucleo/gesto.js';
 import { h, icone, avisar, estadoVazio } from './ui.js';
-import { rotinas } from './rotinas.js';
+import { rotinas, conferirRotinaDoDia } from './rotinas.js';
 import { habitos } from './habitos.js';
 import { tarefas } from './tarefas.js';
 import { painel } from './painel.js';
@@ -164,13 +164,15 @@ function iniciar() {
   });
 
   // Virou o dia com o app aberto: as colunas de hábitos, as marcas das rotinas
-  // e os grupos de prazo dependem da data, então redesenha.
+  // e os grupos de prazo dependem da data, então redesenha. A rotina do dia da
+  // semana, se houver, passa a ser a aberta.
   // O Painel mostra o item do horário atual e quanto falta para o próximo: com ele na tela
   // e nenhuma folha aberta, o desenho acompanha o relógio, de minuto em minuto.
   let diaVisto = hoje();
   const conferirRelogio = () => {
     const virouODia = hoje() !== diaVisto;
     diaVisto = hoje();
+    if (virouODia) conferirRotinaDoDia();
     const painelNaTela = abaAtual().id === 'painel' && !document.querySelector('dialog[open]');
     if (virouODia || painelNaTela) desenhar({ manterRolagem: true });
   };
@@ -195,6 +197,7 @@ function iniciar() {
   window.addEventListener('foco:salvo', agendarSincronia);
   agendarSincronia();
 
+  conferirRotinaDoDia();
   desenhar();
 
   if (problemaDeCarga === PROBLEMA.ILEGIVEL) {
