@@ -43,8 +43,12 @@ function v1ParaV2(dados) {
 // A v6 acrescenta os dias da semana em que o hábito vale. Sem o campo, o hábito vale
 // todo dia, como antes: a validação preenche os sete dias.
 
-// A v7, a v8 e a v9 pertencem a outras mudanças de formato da mesma leva (cada uma no seu PR);
-// aqui os passos só sobem o número.
+// A v7 acrescenta os dias da semana em que cada rotina abre sozinha e o dia em que essa
+// escolha já foi feita. Não há o que converter: sem o campo, a rotina não tem dia nenhum
+// e nada muda sozinho, como antes.
+
+// A v8 e a v9 pertencem a outras mudanças de formato da mesma leva (no PR dela);
+// aqui o passo só sobe o número.
 
 // A v10 acrescenta as pausas (férias e feriados). Não há o que converter: sem o campo, não
 // há pausa nenhuma e as contas dos hábitos ficam como antes.

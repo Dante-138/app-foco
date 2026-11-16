@@ -9,7 +9,9 @@ rotinas do dia, hábitos e tarefas com prazo.
 
 - **Rotinas**: checklists do dia com seções e horários. As marcas zeram sozinhas no dia seguinte.
   O item marcado desce para o fim da seção, e um botão desfaz a última marca. Um item pode ser
-  ligado a um hábito: marcar o item marca o hábito no dia.
+  ligado a um hábito: marcar o item marca o hábito no dia. Cada rotina pode ter dias da semana
+  (menu da rotina, "Dias da semana"): ao virar o dia, o app abre a rotina do dia, e trocar à mão
+  depois disso vale até o dia seguinte.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
   além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
   mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados. Segurar um

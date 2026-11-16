@@ -14,6 +14,7 @@ import { MOTIVO, gerarBackup, lerBackup } from '../../www/js/nucleo/backup.js';
 import { UNIDADES } from '../../www/js/nucleo/repeticao.js';
 import { pontuacao, sequencias } from '../../www/js/nucleo/habito-calculo.js';
 import { somaDias } from '../../www/js/nucleo/datas.js';
+import { abrirRotinaDoDia, definirDias, rotinaDoDia } from '../../www/js/nucleo/rotina-do-dia.js';
 
 const DIA = '2026-11-14';
 const OPCOES = { seed: 20261114, numRuns: 500 };
@@ -64,6 +65,7 @@ const item = registro({
 const rotina = registro({
   id: talvez(id),
   nome: talvez(curto),
+  diasDaSemana: talvez(fc.array(fc.integer({ min: -1, max: 7 }), { maxLength: 8 })),
   itens: talvez(fc.array(item, { maxLength: 6 })),
 });
 const habito = registro({
@@ -108,6 +110,7 @@ const estadoRuim = registro({
   aba: talvez(fc.constantFrom(...ABAS, 'outra')),
   rotinas: talvez(fc.array(rotina, { maxLength: 4 })),
   rotinaAtiva: talvez(fc.option(id)),
+  rotinaDoDiaEm: talvez(fc.option(dia)),
   marcasRotina: talvez(
     registro({
       data: talvez(dia),
@@ -298,6 +301,65 @@ test('propriedade: hábito com os sete dias conta igual a hábito sem a lista de
   );
 });
 
+// ------------------------------------------------------------ rotina do dia
+
+test('propriedade: abrir a rotina do dia deixa o estado válido e só age uma vez por dia', () => {
+  const diaQualquer = fc.integer({ min: -10, max: 10 }).map((n) => somaDias(DIA, n));
+  fc.assert(
+    fc.property(estadoValido, diaQualquer, (estado, diaAberto) => {
+      const antes = structuredClone(estado);
+      const mexeu = abrirRotinaDoDia(estado, diaAberto);
+      assert.equal(mexeu, antes.rotinaDoDiaEm !== diaAberto);
+      assert.equal(estado.rotinaDoDiaEm, diaAberto);
+
+      // A rotina aberta é a do dia, se houver; senão, a mesma de antes. Nada mais muda.
+      const esperada = mexeu
+        ? (rotinaDoDia(antes.rotinas, diaAberto)?.id ?? antes.rotinaAtiva)
+        : antes.rotinaAtiva;
+      assert.deepEqual(estado, { ...antes, rotinaAtiva: esperada, rotinaDoDiaEm: diaAberto });
+
+      // De novo no mesmo dia não faz nada, nem depois de uma troca à mão.
+      const outra = estado.rotinas.at(-1)?.id ?? null;
+      estado.rotinaAtiva = outra;
+      assert.equal(abrirRotinaDoDia(estado, diaAberto), false);
+      assert.equal(estado.rotinaAtiva, outra);
+
+      // O que a função grava passa pela validação sem correção.
+      const lido = lerEstado(JSON.stringify(estado), contexto());
+      assert.deepEqual(lido.estado, estado);
+      assert.deepEqual(lido.avisos, []);
+    }),
+    OPCOES,
+  );
+});
+
+test('propriedade: definir os dias de uma rotina deixa cada dia da semana com uma rotina só', () => {
+  const dias = fc.array(fc.integer({ min: -1, max: 7 }), { maxLength: 9 });
+  fc.assert(
+    fc.property(estadoValido, fc.nat(), dias, (estado, sorteio, escolhidos) => {
+      fc.pre(estado.rotinas.length > 0);
+      const escolhida = estado.rotinas[sorteio % estado.rotinas.length];
+      const itensAntes = structuredClone(estado.rotinas.map((r) => [r.id, r.nome, r.itens]));
+      definirDias(estado.rotinas, escolhida, escolhidos);
+
+      const validos = [...new Set(escolhidos.filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b);
+      assert.deepEqual(escolhida.diasDaSemana, validos);
+      for (const d of validos) {
+        assert.equal(estado.rotinas.filter((r) => r.diasDaSemana.includes(d)).length, 1, `dia ${d} repetido`);
+      }
+      // Só os dias mudam: nome e itens ficam como estavam, e o estado continua válido.
+      assert.deepEqual(
+        estado.rotinas.map((r) => [r.id, r.nome, r.itens]),
+        itensAntes,
+      );
+      const lido = lerEstado(JSON.stringify(estado), contexto());
+      assert.deepEqual(lido.estado, estado);
+      assert.deepEqual(lido.avisos, []);
+    }),
+    OPCOES,
+  );
+});
+
 // ---------------------------------------------------------- férias e feriados
 
 test('propriedade: uma pausa nunca piora a sequência nem a pontuação, e sem pausas a conta é a de sempre', () => {
@@ -365,6 +427,8 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
     hábitos: parte((e) => e.habitos.length > 0),
     'hábitos com dias da semana': parte((e) => e.habitos.some((x) => x.diasDaSemana.length < 7)),
     'rotinas com itens': parte(itensDaRotina),
+    'rotinas com dia da semana': parte((e) => e.rotinas.some((r) => r.diasDaSemana.length > 0)),
+    'dia da rotina do dia': parte((e) => e.rotinaDoDiaEm !== null),
     'itens ligados a hábito': parte((e) => e.rotinas.some((r) => r.itens.some((i) => i.habitoId))),
     tarefas: parte((e) => e.tarefas.length > 0),
     'tarefas com prazo': parte((e) => e.tarefas.some((x) => x.prazo)),
