@@ -62,8 +62,9 @@ o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado n
 ```bash
 npm install         # uma vez
 npm run dev         # servidor local em http://localhost:8137
-npm run check       # o portão inteiro: commits, lint, formatação, testes de unidade e de ponta a ponta
+npm run check       # o portão inteiro: commits, rotas de fuga, lint, formatação, testes de unidade e de ponta a ponta
 npm run commits     # só as mensagens de commit do branch, contra a origin/main
+npm run escapes     # só as rotas de fuga: test.only, .skip, "c8 ignore", "Stryker disable", eslint-disable
 npm run test:mutation  # teste de mutação do núcleo (uns 3 minutos; roda sozinho no CI)
 npm run format      # formata o código com o Prettier
 ```
