@@ -9,23 +9,24 @@ export const EM_RISCO_NO_PAINEL = 5;
 
 // A sequência até ontem. O valor de hoje fica fora da conta: um numérico ainda abaixo da
 // meta zeraria a sequência antes de o dia acabar.
-function sequenciaAteOntem(habito, registro, dia) {
-  if (registro[dia] === undefined) return sequencias(habito, registro, dia).atual;
+function sequenciaAteOntem(habito, registro, dia, pausas) {
+  if (registro[dia] === undefined) return sequencias(habito, registro, dia, pausas).atual;
   const semHoje = { ...registro };
   delete semHoje[dia];
-  return sequencias(habito, semHoje, dia).atual;
+  return sequencias(habito, semHoje, dia, pausas).atual;
 }
 
-// habitos e registros: do estado. dia: hoje, 'AAAA-MM-DD'.
+// habitos, registros e pausas: do estado. dia: hoje, 'AAAA-MM-DD'.
 // Devolve [{ habito, dias }], da sequência mais longa para a mais curta: os hábitos não
 // arquivados que ainda pedem algo hoje (dia de folga do hábito não pede) e vêm de pelo
-// menos MINIMO_EM_RISCO dias seguidos.
-export function sequenciasEmRisco(habitos, registros, dia) {
+// menos MINIMO_EM_RISCO dias seguidos. Dia de pausa não pede nada e não quebra a sequência.
+export function sequenciasEmRisco(habitos, registros, dia, pausas = []) {
   return habitos
     .filter(
-      (habito) => !habito.arquivado && !resolvido(habito, valorDoDia(habito, registros[habito.id], dia)),
+      (habito) =>
+        !habito.arquivado && !resolvido(habito, valorDoDia(habito, registros[habito.id], dia, pausas)),
     )
-    .map((habito) => ({ habito, dias: sequenciaAteOntem(habito, registros[habito.id] ?? {}, dia) }))
+    .map((habito) => ({ habito, dias: sequenciaAteOntem(habito, registros[habito.id] ?? {}, dia, pausas) }))
     .filter(({ dias }) => dias >= MINIMO_EM_RISCO)
     .sort((a, b) => b.dias - a.dias);
 }

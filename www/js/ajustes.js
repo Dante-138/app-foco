@@ -14,6 +14,7 @@ import {
   pedirPermissaoDeLembretes,
   permissaoDeLembretes,
 } from './lembretes.js';
+import { abrirPausas } from './pausas.js';
 
 const TEMAS = [
   ['escuro', 'Escuro'],
@@ -253,6 +254,28 @@ export function abrirAjustes() {
       { class: 'folha-form' },
       h('div', { class: 'rotulo' }, 'Aparência', segmentos),
       secaoDeLembretes(),
+      h(
+        'div',
+        { class: 'rotulo' },
+        'Férias e feriados',
+        h(
+          'div',
+          { class: 'linha-botoes inicio' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'botao contorno',
+              onclick: () => {
+                fechar();
+                abrirPausas();
+              },
+            },
+            estado.pausas.length ? `Pausas (${estado.pausas.length})` : 'Cadastrar pausa',
+          ),
+        ),
+        h('p', { class: 'dica' }, 'Nos dias de pausa os hábitos ficam de folga e a sequência não quebra.'),
+      ),
       h(
         'div',
         { class: 'rotulo' },

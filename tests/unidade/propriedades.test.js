@@ -135,6 +135,11 @@ const estadoRuim = registro({
   notasHabito: talvez(
     fc.dictionary(id, talvez(fc.dictionary(dia, talvez(curto), { maxKeys: 4 })), { maxKeys: 4 }),
   ),
+  pausas: talvez(
+    fc.array(registro({ id: talvez(id), nome: talvez(curto), de: talvez(dia), ate: talvez(dia) }), {
+      maxLength: 4,
+    }),
+  ),
   ocultarConcluidos: logico,
   ocultarArquivados: logico,
   listas: talvez(fc.array(registro({ id: talvez(id), nome: talvez(curto) }), { maxLength: 4 })),
@@ -406,6 +411,58 @@ test('propriedade: definir os dias de uma rotina deixa cada dia da semana com um
   );
 });
 
+// ---------------------------------------------------------- férias e feriados
+
+test('propriedade: uma pausa nunca piora a sequência nem a pontuação, e sem pausas a conta é a de sempre', () => {
+  const diasDoHabito = fc
+    .uniqueArray(fc.integer({ min: 0, max: 6 }), { minLength: 1, maxLength: 7 })
+    .map((d) => d.sort((a, b) => a - b));
+  const marcas = fc.dictionary(
+    fc.integer({ min: -60, max: 5 }).map((n) => somaDias(DIA, n)),
+    fc.oneof(fc.constantFrom('feito', 'pulado'), fc.double({ min: 0, max: 20, noNaN: true })),
+    { maxKeys: 40 },
+  );
+  // Até quatro pausas, de 1 a 11 dias, espalhadas pelo mesmo período das marcas.
+  const pausasGeradas = fc.array(
+    fc.tuple(fc.integer({ min: -62, max: 6 }), fc.integer({ min: 0, max: 10 })).map(([inicio, dias], i) => ({
+      id: `p${i}`,
+      nome: 'Pausa',
+      de: somaDias(DIA, inicio),
+      ate: somaDias(DIA, inicio + dias),
+    })),
+    { maxLength: 4 },
+  );
+  fc.assert(
+    fc.property(
+      fc.boolean(),
+      diasDoHabito,
+      marcas,
+      pausasGeradas,
+      (numerico, diasDaSemana, marcado, pausas) => {
+        const habitoGerado = numerico
+          ? { id: 'h', tipo: 'numero', meta: 8, diasDaSemana }
+          : { id: 'h', tipo: 'simnao', diasDaSemana };
+        const sem = sequencias(habitoGerado, marcado, DIA);
+        const com = sequencias(habitoGerado, marcado, DIA, pausas);
+        assert.ok(com.atual >= sem.atual, `atual com pausa ${com.atual}, sem ${sem.atual}`);
+        assert.ok(com.melhor >= sem.melhor, `melhor com pausa ${com.melhor}, sem ${sem.melhor}`);
+        assert.ok(com.atual <= com.melhor);
+        assert.ok(com.melhor <= Object.keys(marcado).filter((d) => d <= DIA).length);
+
+        const pontosSem = pontuacao(habitoGerado, marcado, DIA);
+        const pontosCom = pontuacao(habitoGerado, marcado, DIA, pausas);
+        assert.ok(pontosCom >= pontosSem - 1e-12, `pontuação com pausa ${pontosCom}, sem ${pontosSem}`);
+        assert.ok(pontosCom >= 0 && pontosCom <= 1 + 1e-9);
+
+        // Lista de pausas vazia é o mesmo que não passar pausa nenhuma.
+        assert.deepEqual(sequencias(habitoGerado, marcado, DIA, []), sem);
+        assert.equal(pontuacao(habitoGerado, marcado, DIA, []), pontosSem);
+      },
+    ),
+    OPCOES,
+  );
+});
+
 // ------------------------------------------------------------- avisos do dia
 
 test('propriedade: o plano dos avisos do dia só tem avisos futuros, em ordem, sem número repetido e dentro dos limites', () => {
@@ -507,6 +564,7 @@ test('o gerador de estados válidos produz estados com conteúdo, não só estad
     'hábitos com lembrete': parte((e) => e.habitos.some((x) => x.lembrete)),
     'algum aviso do dia desligado': parte((e) => Object.values(e.avisosDoDia).includes(false)),
     'notas de hábito': parte((e) => Object.keys(e.notasHabito).length > 0),
+    pausas: parte((e) => e.pausas.length > 0),
     'marcas do dia nas rotinas': parte(marcasDoDia),
   };
   if (process.env.MOSTRAR_GERADOR) console.log(partes);

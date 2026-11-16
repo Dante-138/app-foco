@@ -36,6 +36,7 @@ function comDados() {
     ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },
     notasHabito: { h: { '2026-11-11': 'Dia de viagem' } },
+    pausas: [{ id: 'p', nome: 'Férias', de: '2026-12-21', ate: '2027-01-03' }],
     listas: [{ id: 'l', nome: 'Faculdade' }],
     listaAtiva: 'l',
     tarefas: [

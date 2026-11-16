@@ -62,18 +62,19 @@ function respostaAoToque(habito, dia) {
 
 // A pontuação percorre o histórico inteiro do hábito. Fica guardada por hábito e só é
 // refeita quando o registro dele muda, quando o hábito é editado ou quando o dia vira.
-const pontuacoes = new Map(); // id -> { dia, registro, valor }
+// Mudar as pausas (férias e feriados) também refaz: a lista delas é trocada a cada mudança.
+const pontuacoes = new Map(); // id -> { dia, registro, pausas, valor }
 
 function pontuacaoDe(habito, dia) {
   const registro = estado.registros[habito.id] ?? null;
   const guardada = pontuacoes.get(habito.id);
   // O valor de hoje entra na conferência porque a aba Rotinas também o altera (item ligado a hábito).
   const deHoje = registro?.[dia];
-  if (guardada?.dia === dia && guardada.registro === registro && guardada.deHoje === deHoje) {
-    return guardada.valor;
-  }
-  const valor = registro ? pontuacao(habito, registro, dia) : 0;
-  pontuacoes.set(habito.id, { dia, registro, deHoje, valor });
+  const { pausas } = estado;
+  const mesmaConta = guardada?.dia === dia && guardada.registro === registro && guardada.pausas === pausas;
+  if (mesmaConta && guardada.deHoje === deHoje) return guardada.valor;
+  const valor = registro ? pontuacao(habito, registro, dia, pausas) : 0;
+  pontuacoes.set(habito.id, { dia, registro, pausas, deHoje, valor });
   return valor;
 }
 
@@ -365,9 +366,9 @@ function mover(habito, passo) {
 function resumoDoHabito(habito) {
   const registro = estado.registros[habito.id] ?? {};
   const dia = hoje();
-  const { atual, melhor } = sequencias(habito, registro, dia);
+  const { atual, melhor } = sequencias(habito, registro, dia, estado.pausas);
   const dias = (n) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
-  const pontos = Math.round(pontuacao(habito, registro, dia) * 100);
+  const pontos = Math.round(pontuacao(habito, registro, dia, estado.pausas) * 100);
   return `Pontuação ${pontos}%. Sequência atual: ${dias(atual)}. Melhor: ${dias(melhor)}. Segure um dia na grade para escrever uma nota.`;
 }
 
@@ -606,9 +607,9 @@ const ROTULO_FOLGA = 'folga';
 
 function celulaSemNota(habito, dia, diaHoje) {
   const gravado = estado.registros[habito.id]?.[dia];
-  const valor = valorDoDia(habito, estado.registros[habito.id], dia);
+  const valor = valorDoDia(habito, estado.registros[habito.id], dia, estado.pausas);
   // A folga automática e a resposta ao toque entram juntas no fim das classes da célula.
-  const folgaAutomatica = gravado === undefined && !valeNoDia(habito, dia);
+  const folgaAutomatica = gravado === undefined && !valeNoDia(habito, dia, estado.pausas);
   const extra = `${folgaAutomatica ? ' folga-auto' : ''}${respostaAoToque(habito, dia)}`;
   const rotulo = (estadoTexto) => `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`;
   return habito.tipo === 'numero'
@@ -668,11 +669,14 @@ function render(raiz) {
     ocultarConcluidos: estado.ocultarConcluidos,
     ocultarArquivados: estado.ocultarArquivados,
     manter,
+    pausas: estado.pausas,
   });
   const ocultos = estado.habitos.length - naGrade.length;
   const vaiSumir =
     estado.ocultarConcluidos &&
-    naGrade.some((x) => x.id === manter && resolvido(x, valorDoDia(x, estado.registros[x.id], diaHoje)));
+    naGrade.some(
+      (x) => x.id === manter && resolvido(x, valorDoDia(x, estado.registros[x.id], diaHoje, estado.pausas)),
+    );
 
   raiz.replaceChildren(
     h(

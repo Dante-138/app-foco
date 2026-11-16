@@ -2,28 +2,34 @@
 // O registro de um hábito é { 'AAAA-MM-DD': 'feito' | 'pulado' | número }.
 
 import { DIAS_DA_SEMANA, deIso, diasEntre, somaDias } from './datas.js';
+import { emPausa } from './pausas.js';
+
+// Quem não passa as pausas (férias e feriados, ver pausas.js) faz a conta sem elas.
+const SEM_PAUSAS = Object.freeze([]);
 
 // Dias da semana em que o hábito vale (0 = domingo, como Date.getDay). Sem a lista, todos.
 const diasDe = (habito) => habito.diasDaSemana ?? DIAS_DA_SEMANA;
 const todoDia = (habito) => diasDe(habito).length === 7;
 
-// O hábito pede alguma coisa neste dia? Fora dos dias dele, o dia é folga automática.
-export const valeNoDia = (habito, dia) => todoDia(habito) || diasDe(habito).includes(deIso(dia).getDay());
+// O hábito pede alguma coisa neste dia? Fora dos dias dele, ou num dia de pausa, o dia é
+// folga automática.
+export const valeNoDia = (habito, dia, pausas = SEM_PAUSAS) =>
+  !emPausa(pausas, dia) && (todoDia(habito) || diasDe(habito).includes(deIso(dia).getDay()));
 
 // Valor do dia como as contas enxergam: o registrado ou, em dia fora da frequência e sem
 // registro, a folga ('pulado'). Nada é gravado: a folga automática só existe na conta.
-export function valorDoDia(habito, registro, dia) {
+export function valorDoDia(habito, registro, dia, pausas = SEM_PAUSAS) {
   const valor = registro?.[dia];
-  if (valor !== undefined || valeNoDia(habito, dia)) return valor;
+  if (valor !== undefined || valeNoDia(habito, dia, pausas)) return valor;
   return 'pulado';
 }
 
 // Quantos dias, entre duas datas e sem contar as pontas, o hábito pedia.
-function devidosEntre(habito, de, ate) {
+function devidosEntre(habito, de, ate, pausas) {
   const entre = diasEntre(de, ate) - 1;
-  if (todoDia(habito) || entre <= 0) return Math.max(entre, 0);
+  if ((todoDia(habito) && !pausas.length) || entre <= 0) return Math.max(entre, 0);
   let n = 0;
-  for (let d = somaDias(de, 1); d < ate; d = somaDias(d, 1)) if (valeNoDia(habito, d)) n += 1;
+  for (let d = somaDias(de, 1); d < ate; d = somaDias(d, 1)) if (valeNoDia(habito, d, pausas)) n += 1;
   return n;
 }
 
@@ -59,11 +65,12 @@ export const resolvido = (habito, valor) => valor === 'pulado' || cumprido(habit
 // Quais hábitos aparecem na grade, conforme os filtros. "manter" é o id de um hábito
 // que continua na tela mesmo resolvido: o que acabou de ser marcado, enquanto a
 // resposta ao toque ainda está sendo mostrada.
-export function visiveis(habitos, registros, dia, { ocultarConcluidos, ocultarArquivados, manter = null }) {
+export function visiveis(habitos, registros, dia, opcoes) {
+  const { ocultarConcluidos, ocultarArquivados, manter = null, pausas = SEM_PAUSAS } = opcoes;
   return habitos.filter((habito) => {
     if (ocultarArquivados && habito.arquivado) return false;
     if (!ocultarConcluidos || habito.id === manter) return true;
-    return !resolvido(habito, valorDoDia(habito, registros[habito.id], dia));
+    return !resolvido(habito, valorDoDia(habito, registros[habito.id], dia, pausas));
   });
 }
 
@@ -92,39 +99,39 @@ const diasRegistrados = (registro, dia) =>
 
 // Pontuação do hábito, de 0 a 1, como a do Loop: uma média em que os dias recentes pesam mais.
 //   a cada dia: nova = anterior * PESO + parteCumprida * (1 - PESO)
-// Dia em branco conta como não feito; dia pulado e dia fora da frequência não mexem na
-// pontuação. Hoje só entra
-// na conta depois de registrado, para a pontuação não cair antes de o dia acabar.
-export function pontuacao(habito, registro, dia) {
+// Dia em branco conta como não feito; dia pulado, dia fora da frequência e dia de pausa não
+// mexem na pontuação. Hoje só entra na conta depois de registrado, para a pontuação não cair
+// antes de o dia acabar.
+export function pontuacao(habito, registro, dia, pausas = SEM_PAUSAS) {
   let pontos = 0;
   let anterior = null;
   for (const d of diasRegistrados(registro, dia)) {
-    if (anterior) pontos *= PESO ** devidosEntre(habito, anterior, d); // dias em branco no meio
+    if (anterior) pontos *= PESO ** devidosEntre(habito, anterior, d, pausas); // dias em branco no meio
     if (registro[d] !== 'pulado') {
       pontos = pontos * PESO + parteCumprida(habito, registro[d]) * (1 - PESO);
     }
     anterior = d;
   }
   // dias em branco depois do último registro, até ontem
-  if (anterior && anterior < dia) pontos *= PESO ** devidosEntre(habito, anterior, dia);
+  if (anterior && anterior < dia) pontos *= PESO ** devidosEntre(habito, anterior, dia, pausas);
   return pontos;
 }
 
 // Sequências de dias seguidos cumprindo o hábito: { atual, melhor }.
-// Dia pulado e dia fora da frequência não quebram a sequência nem entram na contagem;
-// dia em branco que o hábito pedia quebra.
+// Dia pulado, dia fora da frequência e dia de pausa não quebram a sequência nem entram na
+// contagem; dia em branco que o hábito pedia quebra.
 // A atual vale até ontem: hoje ainda em branco não a interrompe.
-export function sequencias(habito, registro, dia) {
+export function sequencias(habito, registro, dia, pausas = SEM_PAUSAS) {
   let corrida = 0;
   let melhor = 0;
   let anterior = null;
   for (const d of diasRegistrados(registro, dia)) {
-    if (anterior === null || devidosEntre(habito, anterior, d) > 0) corrida = 0;
+    if (anterior === null || devidosEntre(habito, anterior, d, pausas) > 0) corrida = 0;
     if (cumprido(habito, registro[d])) corrida += 1;
     else if (registro[d] !== 'pulado') corrida = 0; // numérico abaixo da meta
     melhor = Math.max(melhor, corrida);
     anterior = d;
   }
-  const viva = anterior !== null && devidosEntre(habito, anterior, dia) === 0;
+  const viva = anterior !== null && devidosEntre(habito, anterior, dia, pausas) === 0;
   return { atual: viva ? corrida : 0, melhor };
 }

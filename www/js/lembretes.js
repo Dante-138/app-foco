@@ -73,7 +73,7 @@ function planoEm(agoraDasTarefas, agoraDoDia, { semLimite = false } = {}) {
       habitos: estado.habitos,
       registros: estado.registros,
       tarefas: estado.tarefas,
-      habitoVale: valeNoDia,
+      habitoVale: (habito, dia) => valeNoDia(habito, dia, estado.pausas),
     },
     estado.avisosDoDia,
     agoraDoDia,

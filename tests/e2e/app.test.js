@@ -200,7 +200,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 9);
+  assert.equal(salvo.versao, 10);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -1687,6 +1687,89 @@ test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e 
   assert.deepEqual(erros, []);
 });
 
+// ------------------------------------------------------------ férias e feriados
+
+test('pausas: férias e feriados deixam os hábitos de folga e a sequência não quebra', async (t) => {
+  // O relógio começa no sábado, 14/11/2026. A Leitura foi feita de 08 a 12; a sexta 13 ficou em branco.
+  const feitos = Object.fromEntries(['08', '09', '10', '11', '12'].map((d) => [`2026-11-${d}`, 'feito']));
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'habitos',
+    habitos: [{ id: 'h', nome: 'Leitura', cor: 'azul', tipo: 'simnao' }],
+    registros: { h: feitos },
+  });
+  const { pagina, erros } = await abrir(t, {
+    salvo,
+    preparar: (contexto) => contexto.clock.install({ time: new Date('2026-11-14T10:00:00-03:00') }),
+  });
+  const pausasSalvas = async () =>
+    JSON.parse(await lerSalvo(pagina, CHAVE)).pausas.map((p) => [p.nome, p.de, p.ate]);
+  const resumoDaLeitura = async () => {
+    await botao(pagina, 'Editar Leitura').click();
+    const texto = await pagina.locator('dialog[open] .dica').first().textContent();
+    await botao(pagina, 'Cancelar').click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+    return texto;
+  };
+  const abrirPausas = async (rotulo) => {
+    await botao(pagina, 'Ajustes').click();
+    await botao(pagina, rotulo).click();
+    await visivel(pagina.getByRole('heading', { name: 'Férias e feriados' }));
+  };
+  const fecharPausas = async () => {
+    await botao(pagina, 'Fechar').click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+  const sexta = pagina.getByRole('button', { name: /^Leitura, sex\., dia 13/ });
+
+  // Sem pausa, a sexta em branco quebrou a sequência.
+  assert.match(await resumoDaLeitura(), /Sequência atual: 0 dias\. Melhor: 5 dias/);
+  assert.equal(await sexta.getAttribute('aria-label'), 'Leitura, sex., dia 13: não feito');
+
+  // Feriado na sexta (sem a data final, vale um dia só): a sequência volta e nada é gravado no dia.
+  await abrirPausas('Cadastrar pausa');
+  await visivel(pagina.getByText('Nenhuma pausa cadastrada.'));
+  await pagina.getByLabel('Nome', { exact: true }).fill('Feriado');
+  await pagina.getByLabel('De', { exact: true }).fill('2026-11-13');
+  await botao(pagina, 'Adicionar').click();
+  await visivel(pagina.locator('dialog[open] .tarefa', { hasText: 'Feriado' }).getByText('sex., 13 de nov.'));
+  await fecharPausas();
+  assert.deepEqual(await pausasSalvas(), [['Feriado', '2026-11-13', '2026-11-13']]);
+  assert.equal(await sexta.getAttribute('aria-label'), 'Leitura, sex., dia 13: folga');
+  assert.match(await sexta.getAttribute('class'), /folga-auto/);
+  assert.match(await resumoDaLeitura(), /Sequência atual: 5 dias\. Melhor: 5 dias/);
+  assert.equal(Object.hasOwn(JSON.parse(await lerSalvo(pagina, CHAVE)).registros.h, '2026-11-13'), false);
+
+  // Férias com as datas trocadas entram em ordem; cobrindo hoje, o Painel tira o hábito da conta.
+  await abrirPausas('Pausas (1)');
+  await pagina.getByLabel('De', { exact: true }).fill('2026-11-16');
+  await pagina.getByLabel('Até (opcional)').fill('2026-11-14');
+  await botao(pagina, 'Adicionar').click();
+  await visivel(
+    pagina.locator('dialog[open] .tarefa', { hasText: 'Pausa' }).getByText(/14 de nov\. a .*16 de nov\./),
+  );
+  await fecharPausas();
+  assert.deepEqual(await pausasSalvas(), [
+    ['Feriado', '2026-11-13', '2026-11-13'],
+    ['Pausa', '2026-11-14', '2026-11-16'],
+  ]);
+  await botao(pagina, 'Painel').click();
+  assert.equal(
+    await pagina.locator('.painel-contador', { hasText: 'Hábitos' }).locator('b').textContent(),
+    '0 de 0',
+  );
+
+  // Excluir o feriado: a sexta volta a ser um dia em branco e a sequência quebra de novo.
+  await botao(pagina, 'Hábitos').click();
+  await abrirPausas('Pausas (2)');
+  await botao(pagina, 'Excluir a pausa Feriado').click();
+  await fecharPausas();
+  assert.deepEqual(await pausasSalvas(), [['Pausa', '2026-11-14', '2026-11-16']]);
+  assert.equal(await sexta.getAttribute('aria-label'), 'Leitura, sex., dia 13: não feito');
+  assert.match(await resumoDaLeitura(), /Sequência atual: 0 dias\. Melhor: 5 dias/);
+  assert.deepEqual(erros, []);
+});
+
 test('painel: o item do horário atual, quanto falta para o próximo e as sequências em risco', async (t) => {
   // O relógio começa na sexta, 13/11/2026, às 07:10.
   const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
@@ -2753,7 +2836,7 @@ test('hábito com dias da semana: fora deles o dia vira folga sem gravar nada', 
 
   await visivel(botao(pagina, 'Leitura, hoje: folga'));
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 9);
+  assert.equal(salvo.versao, 10);
   assert.equal(salvo.habitos[0].diasDaSemana.length, 6);
   assert.equal(salvo.habitos[0].diasDaSemana.includes(hojeNaSemana), false);
   assert.deepEqual(salvo.registros.h ?? {}, {});
