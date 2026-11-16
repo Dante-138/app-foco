@@ -14,8 +14,7 @@ test('o build.gradle tem a versão do package.json, na linha marcada para o rele
   if (!temAndroid) return;
   const { version } = JSON.parse(ler('package.json'));
   const linhas = ler('android/app/build.gradle')
-    .split('
-')
+    .split('\n')
     .filter((linha) => linha.includes('x-release-please-version'));
   assert.equal(linhas.length, 1);
   assert.ok(linhas[0].includes(`def versao = "${version}"`), linhas[0]);
