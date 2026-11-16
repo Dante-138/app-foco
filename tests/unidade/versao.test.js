@@ -10,16 +10,14 @@ const ler = (caminho) => readFileSync(new URL(`../../${caminho}`, import.meta.ur
 // O teste de mutação (Stryker) roda numa cópia sem a pasta android; lá não há o que conferir.
 const temAndroid = existsSync(new URL('../../android/app/build.gradle', import.meta.url));
 
-test(
-  'o build.gradle tem a versão do package.json, na linha marcada para o release-please',
-  { skip: !temAndroid },
-  () => {
-    const { version } = JSON.parse(ler('package.json'));
-    const linhas = ler('android/app/build.gradle')
-      .split('\n')
-      .filter((linha) => linha.includes('x-release-please-version'));
-    assert.equal(linhas.length, 1);
-    assert.ok(linhas[0].includes(`def versao = "${version}"`), linhas[0]);
-    assert.equal(JSON.parse(ler('.release-please-manifest.json'))['.'], version);
-  },
-);
+test('o build.gradle tem a versão do package.json, na linha marcada para o release-please', () => {
+  if (!temAndroid) return;
+  const { version } = JSON.parse(ler('package.json'));
+  const linhas = ler('android/app/build.gradle')
+    .split('
+')
+    .filter((linha) => linha.includes('x-release-please-version'));
+  assert.equal(linhas.length, 1);
+  assert.ok(linhas[0].includes(`def versao = "${version}"`), linhas[0]);
+  assert.equal(JSON.parse(ler('.release-please-manifest.json'))['.'], version);
+});
