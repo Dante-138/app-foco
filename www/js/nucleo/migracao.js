@@ -2,7 +2,7 @@
 // A migração roda antes da validação (esquema.js) e recebe dados ainda não
 // conferidos, então cada passo precisa tolerar campos ausentes ou malformados.
 
-export const VERSAO = 8;
+export const VERSAO = 9;
 
 // A v1 guardava a cor do hábito como hexadecimal. A v2 guarda a chave da
 // paleta, para a cor acompanhar o tema claro ou escuro.
@@ -50,6 +50,9 @@ function v1ParaV2(dados) {
 // A v8 acrescenta os avisos antecipados da tarefa (dias antes do prazo). Não há o que
 // converter: sem o campo, a tarefa avisa só no prazo, como antes.
 
+// A v9 acrescenta a hora do lembrete do hábito e quais avisos do dia estão ligados. Não há
+// o que converter: sem os campos, o hábito não tem lembrete e os avisos nascem no padrão.
+
 // Cada passo sobe uma versão. Altera e devolve o próprio objeto.
 // Quem chama garante que dados.versao é um inteiro entre 1 e VERSAO.
 export function migrar(dados) {
@@ -63,5 +66,6 @@ export function migrar(dados) {
   if (dados.versao < 6) dados.versao = 6;
   if (dados.versao < 7) dados.versao = 7;
   if (dados.versao < 8) dados.versao = 8;
+  if (dados.versao < 9) dados.versao = 9;
   return dados;
 }

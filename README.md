@@ -26,6 +26,12 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data. "Avisar antes" (1, 3 ou 7 dias) acrescenta avisos antecipados e,
   se a tarefa continuar pendente, um aviso na manhã seguinte ao vencimento.
+- **Avisos do dia**: também por notificação, cada um com o seu interruptor em Ajustes (a rotina
+  no relógio nasce desligada; os outros, ligados). Resumo
+  da manhã às 7h (rotina, hábitos e tarefas do dia), revisão da noite às 22h (o que falta), a
+  rotina no relógio (cada item com horário avisa na hora, se ainda não foi marcado) e o
+  lembrete do hábito, na hora escolhida na edição dele, com o botão "Feito" na própria
+  notificação. Hábito ligado a um item de rotina com horário é avisado pela rotina, sem repetir.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
   tarefas de hoje. Marca item e conclui tarefa ali mesmo. Em rotina com horários, a lista começa
   no item do horário atual ("agora") e mostra quanto falta para o próximo. As sequências em
