@@ -6,7 +6,12 @@
 //            que está sendo enviado, que pode não ser o do branch aberto.
 //   Confere os commits de <base>..<ponta>.
 //
-// Roda em três lugares: no "npm run check", no gancho .githooks/pre-push e no CI.
+// Roda em quatro lugares: no "npm run check", nos ganchos .githooks/commit-msg e
+// .githooks/pre-push e no CI.
+//
+// Uso só para uma mensagem: node tools/verificar-commits.mjs --mensagem <arquivo>
+//   Confere a mensagem do arquivo antes de o commit existir. É o modo do gancho commit-msg: o
+//   git passa o arquivo com a mensagem escrita, com os comentários do editor, que são ignorados.
 //
 // Variável de ambiente opcional TITULO_PR: título do pull request, conferido
 // pela mesma regra (com squash merge, é ele que vira o commit na main).
@@ -105,6 +110,18 @@ export function problemasDaMensagem(mensagem, autor = '', termos = []) {
   return problemas;
 }
 
+// A mensagem como fica no commit: sem as linhas de comentário do editor ("#") e sem o diff que o
+// "git commit -v" põe abaixo da linha de corte.
+const CORTE = /^# -+ >8 -+$/m;
+export function limparMensagemDoEditor(bruta) {
+  const [semDiff] = bruta.replace(/\r\n/g, '\n').split(CORTE, 1);
+  return semDiff
+    .split('\n')
+    .filter((linha) => !linha.startsWith('#'))
+    .join('\n')
+    .trim();
+}
+
 function termosConfigurados() {
   const arquivo =
     process.env.ARQUIVO_TERMOS_PROIBIDOS ??
@@ -162,9 +179,32 @@ function conferirPr() {
   ]);
 }
 
+// Modo --mensagem: uma mensagem só, lida do arquivo que o git passa ao gancho commit-msg.
+function conferirArquivo(arquivo) {
+  if (!arquivo) {
+    console.error('Uso: node tools/verificar-commits.mjs --mensagem <arquivo>');
+    return 2;
+  }
+  let bruta;
+  try {
+    bruta = readFileSync(arquivo, 'utf8');
+  } catch {
+    console.error(`Não consegui ler a mensagem em ${arquivo}.`);
+    return 2;
+  }
+  const mensagem = limparMensagemDoEditor(bruta);
+  return relatar([
+    {
+      rotulo: `mensagem do commit: ${mensagem.split('\n')[0]}`,
+      problemas: problemasDaMensagem(mensagem, '', termosConfigurados()),
+    },
+  ]);
+}
+
 function principal() {
   const [base, ponta = 'HEAD'] = process.argv.slice(2);
   if (base === '--pr') return conferirPr();
+  if (base === '--mensagem') return conferirArquivo(process.argv[3]);
   if (!base) {
     console.error('Uso: node tools/verificar-commits.mjs <base> [<ponta>]   (exemplo: origin/main)');
     return 2;

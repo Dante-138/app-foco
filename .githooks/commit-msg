@@ -1,0 +1,8 @@
+#!/bin/sh
+# Gancho de commit-msg: confere a mensagem antes de o commit existir, com a mesma regra do CI
+# (tools/verificar-commits.mjs). Ligado pelo "npm install" (script "prepare"); à mão:
+#   git config core.hooksPath .githooks
+#
+# Commit de merge fica de fora, como no CI, que confere com "git log --no-merges".
+git rev-parse -q --verify MERGE_HEAD >/dev/null && exit 0
+exec node tools/verificar-commits.mjs --mensagem "$1"

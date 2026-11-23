@@ -5,7 +5,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lerTermos, problemasDaMensagem, problemasDoAssunto } from '../../tools/verificar-commits.mjs';
+import {
+  lerTermos,
+  limparMensagemDoEditor,
+  problemasDaMensagem,
+  problemasDoAssunto,
+} from '../../tools/verificar-commits.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../../tools/verificar-commits.mjs', import.meta.url));
 
@@ -174,6 +179,59 @@ test('modo --pr: sem título, saída 2', () => {
   const { status, stderr } = rodarPr('   ');
   assert.equal(status, 2);
   assert.match(stderr, /TITULO_PR está vazia/);
+});
+
+// ------------------------------------------------- modo --mensagem (gancho commit-msg)
+
+test('mensagem do editor: sem comentários, sem o diff abaixo do corte, com CRLF', () => {
+  const bruta = [
+    'feat: add tabs',
+    '',
+    'Corpo.',
+    '# Please enter the commit message for your changes.',
+    '# ------------------------ >8 ------------------------',
+    'diff --git a/x b/x',
+    '+Co-Authored-By: não conta, está no diff',
+  ].join('\r\n');
+  assert.equal(limparMensagemDoEditor(bruta), 'feat: add tabs\n\nCorpo.');
+  assert.equal(limparMensagemDoEditor('# só comentário\n'), '');
+});
+
+// Grava a mensagem num arquivo descartável e roda o script no modo do gancho.
+function rodarMensagem(t, mensagem, ambiente = {}) {
+  const pasta = mkdtempSync(join(tmpdir(), 'foco-mensagem-'));
+  t.after(() => rmSync(pasta, { recursive: true, force: true, maxRetries: 3 }));
+  const arquivo = join(pasta, 'COMMIT_EDITMSG');
+  writeFileSync(arquivo, mensagem);
+  return rodar(pasta, ['--mensagem', arquivo], ambiente);
+}
+
+test('modo --mensagem: mensagem no padrão passa, com os comentários do editor', (t) => {
+  const { status, stdout } = rodarMensagem(t, 'fix: keep the tab\n\n# Comentário do git\n');
+  assert.equal(status, 0);
+  assert.match(stdout, /^1 mensagem\(ns\) conferida\(s\), 0 reprovada\(s\)\.$/m);
+});
+
+// A regra em si (coautoria, tamanho) já tem teste direto acima; aqui basta provar que o modo usa
+// a mesma regra e a lista de termos, sem somar processos (cada um custa segundos no Windows).
+test('modo --mensagem: assunto fora do padrão ou termo proibido reprovam', (t) => {
+  const assunto = rodarMensagem(t, 'Add stuff\n');
+  assert.equal(assunto.status, 1);
+  assert.match(assunto.stderr, /^REPROVADO {2}mensagem do commit: Add stuff$/m);
+
+  const termo = rodarMensagem(t, 'feat: add the zebra tab\n', { TERMOS_PROIBIDOS: 'zebra' });
+  assert.equal(termo.status, 1);
+  assert.match(termo.stderr, /termo proibido nº 1/);
+});
+
+test('modo --mensagem: sem arquivo ou arquivo que não existe, saída 2', () => {
+  const sem = rodar(tmpdir(), ['--mensagem']);
+  assert.equal(sem.status, 2);
+  assert.match(sem.stderr, /^Uso: node tools\/verificar-commits\.mjs --mensagem <arquivo>/);
+
+  const inexistente = rodar(tmpdir(), ['--mensagem', join(tmpdir(), 'foco-nao-existe', 'MSG')]);
+  assert.equal(inexistente.status, 2);
+  assert.match(inexistente.stderr, /Não consegui ler a mensagem/);
 });
 
 // ------------------------------------------------- exceção do Dependabot

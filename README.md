@@ -82,8 +82,10 @@ npm run test:mutation  # teste de mutação do núcleo (uns 3 minutos; roda sozi
 npm run format      # formata o código com o Prettier
 ```
 
-O repositório traz um gancho de `pre-push` (pasta `.githooks`) que confere as mensagens dos
-commits antes de eles saírem da máquina. Ative uma vez por clone:
+O repositório traz dois ganchos (pasta `.githooks`) com a mesma regra do CI: o `commit-msg`
+confere a mensagem antes de o commit existir, e o `pre-push` confere de novo os commits antes de
+eles saírem da máquina. O `npm install` (ou `npm ci`) liga os dois sozinho, pelo script
+`prepare`. Sem instalar, ative uma vez por clone:
 
 ```bash
 git config core.hooksPath .githooks

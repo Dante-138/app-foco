@@ -30,7 +30,8 @@ Cada área tem um editor por vez. Mexer na área de outro só depois de combinar
 
 - `npm run check` verde: commits, lint, formatação, testes de unidade (100% do núcleo) e de
   ponta a ponta.
-- Gancho de pre-push ligado no clone: `git config core.hooksPath .githooks`.
+- Ganchos `commit-msg` e `pre-push` ligados no clone: o `npm install` liga sozinho; à mão,
+  `git config core.hooksPath .githooks`.
 - Não rodar o portão com outro processo pesado na máquina (build do APK, teste de mutação): os
   testes de ponta a ponta que dependem de tempo falham sob carga. Se falhar um teste alheio à
   mudança, repetir sozinho e na suíte, e dizer no PR.
