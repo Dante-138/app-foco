@@ -126,6 +126,35 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
+### No celular, pelo adb (cabo ou Wi-Fi)
+
+`tools/aparelho.mjs` faz o que antes era um comando solto por vez. Fala com o app instalado pelo
+WebView, então o app precisa ser o APK de depuração (`-Tipo debug`), que instala por cima do de
+release sem apagar os dados.
+
+```bash
+node tools/aparelho.mjs copia                           # salva no PC o que o app tem guardado
+node tools/aparelho.mjs instalar saida/foco-debug.apk   # copia, instala por cima e confere os dados
+node tools/aparelho.mjs conferir                        # abre o app: abas, erros no console e dados
+```
+
+- A instalação só começa depois da cópia salva e termina comparando os dados de antes e de
+  depois. Se alguma contagem cair, ou se o app deixar de responder ao PC depois de instalar
+  (nada conferido), ela termina com erro e aponta a cópia.
+- No celular, só entra o APK pedido: o script não instala o driver do Playwright nem outro app.
+- Nunca desinstala (desinstalar apaga os dados) e nunca desbloqueia a tela: com o celular
+  bloqueado, ela para e pede o desbloqueio.
+- As cópias ficam em `~/foco-copias` (ou na pasta de `FOCO_COPIAS`, ou em `--pasta`), fora do
+  repositório, porque têm os dados de verdade.
+- `--pr` usa o app de PR, `--rebaixar` instala um APK de versão mais antiga (os dados ficam) e
+  `--aparelho <serial>` escolhe o aparelho quando há mais de um.
+- Com o APK de release instalado, o PC não consegue ler os dados. Guarde a cópia pelo próprio
+  app (Ajustes > Copiar dados) e instale o de depuração com `--copiei-pelo-app`.
+- Sem cabo: no celular, Opções do desenvolvedor > Depuração por Wi-Fi > Parear com código. No
+  PC, `adb pair IP:PORTA` com o código da tela, e depois `adb connect IP:PORTA` com a porta que
+  aparece na tela da depuração por Wi-Fi. O PC e o celular ficam na mesma rede. Depois de
+  reiniciar o celular, a porta muda: rode `adb connect` de novo com a porta nova.
+
 ### APK de PR
 
 Todo pull request ganha um APK para testar no celular antes do merge: o job `Android` anexa
