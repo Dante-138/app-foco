@@ -65,6 +65,25 @@ adb reverse tcp:8137 tcp:8137
 
 Depois acesse `http://localhost:8137` no Chrome do celular.
 
+### No navegador do PC, sem instalar nada
+
+A cada merge na `main`, o workflow Pages publica o app em
+`https://dante-138.github.io/app-foco/`: o mesmo `www/` do APK, com o carimbo do build. No Chrome ou
+no Edge, o ícone de instalar na barra de endereço abre o app em janela própria, e depois da
+primeira visita ele abre sem rede (service worker `www/sw.js`, preenchido por
+`tools/montar-web.mjs`). Os dados ficam no navegador de cada aparelho: o PC e o celular ainda não
+se enxergam.
+
+Para conferir o que vai ser publicado:
+
+```bash
+node tools/montar-web.mjs _site
+```
+
+Antes do primeiro deploy, o dono liga o Pages uma vez: Settings > Pages > Source "GitHub Actions".
+Sem isso o workflow só avisa e termina verde. Ligado o Pages, a primeira publicação sai no próximo
+merge na `main` ou na hora, em Actions > Pages > Run workflow.
+
 ## Desenvolvimento
 
 Quem edita o quê, o fluxo de PR e as armadilhas conhecidas estão em [AGENTS.md](AGENTS.md).

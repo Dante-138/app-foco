@@ -12,6 +12,7 @@ import { painel } from './painel.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
 import { agendarSincronia, ligarNotificacoes } from './lembretes.js';
+import { registrarOffline } from './offline.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
@@ -209,6 +210,7 @@ function iniciar() {
     irParaAba(abaDoTipo[tipo] ?? 'painel');
   });
   ligarNotificacoes();
+  registrarOffline();
 
   if (problemaDeCarga === PROBLEMA.ILEGIVEL) {
     avisar('Os dados salvos estavam ilegíveis. Uma cópia foi guardada e o app começou do zero.');
