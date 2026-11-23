@@ -111,7 +111,8 @@ export function problemasDaMensagem(mensagem, autor = '', termos = []) {
 }
 
 // A mensagem como fica no commit: sem as linhas de comentário do editor ("#") e sem o diff que o
-// "git commit -v" põe abaixo da linha de corte.
+// "git commit -v" põe abaixo da linha de corte. Limite conhecido: no "git commit -m" o git guarda
+// uma linha que começa com "#"; o gancho não a confere, e o pre-push e o CI pegam depois.
 const CORTE = /^# -+ >8 -+$/m;
 export function limparMensagemDoEditor(bruta) {
   const [semDiff] = bruta.replace(/\r\n/g, '\n').split(CORTE, 1);

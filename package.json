@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node tools/serve.mjs",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || exit 0",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
