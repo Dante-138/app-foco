@@ -4,7 +4,7 @@ import { CHAVE, estado, salvar, problemaDeCarga, correcoesNaCarga } from './stor
 import { hoje } from './nucleo/datas.js';
 import { PROBLEMA } from './nucleo/estado.js';
 import { passoDoDeslize, vizinha } from './nucleo/gesto.js';
-import { h, icone, avisar, estadoVazio } from './ui.js';
+import { h, icone, avisar, estadoVazio, arrastouAgora } from './ui.js';
 import { rotinas, conferirRotinaDoDia } from './rotinas.js';
 import { habitos, marcarHabitoNoDia } from './habitos.js';
 import { tarefas } from './tarefas.js';
@@ -100,7 +100,7 @@ function ligarDeslize() {
   conteudo.addEventListener(
     'touchend',
     (e) => {
-      if (!inicio) return;
+      if (!inicio || arrastouAgora()) return;
       const fim = e.changedTouches[0];
       const passo = passoDoDeslize({
         dx: fim.clientX - inicio.x,

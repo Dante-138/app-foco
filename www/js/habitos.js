@@ -35,8 +35,10 @@ import {
   campo,
   estadoVazio,
   redesenhar,
+  reordenavel,
   vibrar,
 } from './ui.js';
+import { reordenar } from './nucleo/reordenar.js';
 import { seletorDeDias } from './dias-da-semana.js';
 
 const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
@@ -650,7 +652,22 @@ function celulaSimNao(habito, dia, { valor, extra, rotulo }) {
   );
 }
 
+// Segurar o nome de um hábito e arrastar muda a ordem dele entre os que estão na grade; os que
+// o filtro esconde não saem do lugar. Segurar uma célula continua abrindo o dia.
+function aoArrastarHabitos(ids) {
+  estado.habitos = reordenar(estado.habitos, ids);
+  salvar();
+  redesenhar();
+}
+
+// O arraste fica no #conteudo, que é o mesmo em todas as abas: liga uma vez só.
+let arrasteLigado = false;
+
 function render(raiz) {
+  if (!arrasteLigado) {
+    reordenavel(raiz, { linhas: '.habito[data-id]', pega: '.habito-nome', aoSoltar: aoArrastarHabitos });
+    arrasteLigado = true;
+  }
   if (!estado.habitos.length) {
     raiz.replaceChildren(estadoVazio('Nenhum hábito ainda', 'Toque em + para criar o primeiro.'));
     return;
@@ -704,7 +721,11 @@ function render(raiz) {
       naGrade.map((habito) =>
         h(
           'div',
-          { class: `habito${habito.arquivado ? ' arquivado' : ''}`, style: { '--cor': corCss(habito.cor) } },
+          {
+            class: `habito${habito.arquivado ? ' arquivado' : ''}`,
+            'data-id': habito.id,
+            style: { '--cor': corCss(habito.cor) },
+          },
           h(
             'button',
             {
