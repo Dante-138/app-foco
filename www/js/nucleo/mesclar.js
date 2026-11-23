@@ -86,7 +86,6 @@ function lerJson(t) {
 // Lê um caminho; devolve a lista de partes, ou null para caminho desconhecido ou malformado (dado
 // de fora nunca derruba a junção).
 export function lerCaminho(c) {
-  if (typeof c !== 'string') return null;
   const partes = lerJson(c);
   if (!Array.isArray(partes) || !partes.every(texto)) return null;
   const [tipo, nome] = partes;
