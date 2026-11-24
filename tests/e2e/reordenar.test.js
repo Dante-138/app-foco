@@ -18,6 +18,16 @@ async function arrastar(pagina, de, ate) {
   await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
 }
 
+// Segura o meio de "linha" até ela soltar e solta no mesmo lugar, sem mexer o dedo.
+async function segurarESoltar(pagina, linha) {
+  const caixa = await linha.boundingBox();
+  await pagina.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+  await pagina.mouse.down();
+  await pagina.locator('.arrastando').waitFor(ESPERA);
+  await pagina.mouse.up();
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+}
+
 const salvoDe = async (pagina) => JSON.parse(await lerSalvo(pagina, CHAVE));
 
 // Guarda em window.ponteiroDoTeste o pointerId do próximo toque, para simular eventos dele.
@@ -317,13 +327,13 @@ test('rotina: segurar um item ou o nome de uma seção e arrastar muda a ordem, 
   assert.deepEqual(await pendentes(), ['SAIR', 'Pegar a chave', 'ACORDAR', 'Fechar a porta', 'Levantar']);
   assert.deepEqual(await ordem(), ['s2', 'i3', 's1', 'i4', 'i1', 'i2']);
 
+  // A seção do alto, segura e solta no lugar, continua antes dos itens dela.
+  await segurarESoltar(pagina, nomeDaSecao('SAIR'));
+  assert.deepEqual(await pendentes(), ['SAIR', 'Pegar a chave', 'ACORDAR', 'Fechar a porta', 'Levantar']);
+  assert.deepEqual(await ordem(), ['s2', 'i3', 's1', 'i4', 'i1', 'i2']);
+
   // Segurar e soltar no lugar não marca o item.
-  const caixa = await linhaDoItem('Levantar').boundingBox();
-  await pagina.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
-  await pagina.mouse.down();
-  await pagina.locator('.arrastando').waitFor(ESPERA);
-  await pagina.mouse.up();
-  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  await segurarESoltar(pagina, linhaDoItem('Levantar'));
   assert.equal(await linhaDoItem('Levantar').getAttribute('aria-checked'), 'false');
   await visivel(pagina.getByText('1 de 4 hoje'));
   assert.deepEqual(erros, []);

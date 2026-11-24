@@ -773,9 +773,13 @@ export function reordenavel(
       }
       const depois = ids();
       const id = linha.dataset[chave];
+      const mudou = depois.join('\n') !== antes;
       const gravar = () => {
+        // Sem mudança à vista, a linha volta ao lugar exato de antes: entre as escondidas (o
+        // bloco da seção) ela pode ter parado do outro lado delas, e nada redesenha a tela.
+        if (!mudou) lugar.pai.insertBefore(linha, lugar.proxima);
         concluir();
-        if (depois.join('\n') !== antes) aoSoltar(depois, id);
+        if (mudou) aoSoltar(depois, id);
       };
       if (semMovimento() || Math.abs(solta) < 1) {
         gravar();
