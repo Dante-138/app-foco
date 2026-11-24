@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const raiz = resolve(fileURLToPath(new URL('../www', import.meta.url)));
+const WWW = resolve(fileURLToPath(new URL('../www', import.meta.url)));
 
 const tipos = {
   '.html': 'text/html; charset=utf-8',
@@ -21,7 +21,7 @@ const tipos = {
   '.webmanifest': 'application/manifest+json',
 };
 
-async function responder(req, res) {
+const responderDe = (raiz) => async (req, res) => {
   let caminho;
   try {
     caminho = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -47,12 +47,13 @@ async function responder(req, res) {
   } catch {
     res.writeHead(404).end('Nao encontrado');
   }
-}
+};
 
 // Sobe o servidor e devolve { servidor, url }. Porta 0 pede uma porta livre ao sistema.
-export function iniciarServidor(porta = 0) {
+// pasta: o que servir (padrão: www/; o teste do app publicado serve o build de tools/montar-web.mjs).
+export function iniciarServidor(porta = 0, pasta = WWW) {
   return new Promise((resolver, rejeitar) => {
-    const servidor = createServer(responder);
+    const servidor = createServer(responderDe(resolve(pasta)));
     servidor.once('error', rejeitar);
     servidor.listen(porta, '127.0.0.1', () => {
       resolver({ servidor, url: `http://localhost:${servidor.address().port}` });

@@ -86,6 +86,12 @@ export default [
     },
   },
 
+  // ------------------------------------------------- service worker do app publicado
+  {
+    files: ['www/sw.js'],
+    languageOptions: { sourceType: 'script', globals: globals.serviceworker },
+  },
+
   // ------------------------------------------------- interface (navegador)
   {
     files: ['www/js/*.js'],

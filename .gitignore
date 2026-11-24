@@ -14,3 +14,6 @@ keystore.properties
 
 # APK gerado localmente
 saida/
+
+# App web montado para o GitHub Pages (tools/montar-web.mjs)
+_site/
