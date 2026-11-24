@@ -4,11 +4,12 @@
     <meta charset="utf-8" />
     <!--
       Política de segurança: só scripts, estilos e fontes do próprio app, nenhuma conexão
-      de rede e nenhuma atribuição de HTML em texto (Trusted Types).
+      de rede e nenhuma atribuição de HTML em texto (Trusted Types). A única política de
+      Trusted Types, foco-sw, só aceita o service worker do app (js/offline.js).
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types foco-sw"
     />
     <!-- interactive-widget=resizes-content: o teclado encolhe a página, e as folhas de edição sobem junto -->
     <meta
@@ -18,6 +19,8 @@
     <meta name="theme-color" content="#000000" />
     <title>Foco</title>
     <link rel="icon" type="image/svg+xml" href="icone.svg" />
+    <!-- No navegador do PC ou do celular, o app pode ser instalado como janela própria -->
+    <link rel="manifest" href="manifest.webmanifest" />
     <!-- Síncrono e antes do CSS: define o tema antes do primeiro desenho -->
     <script src="js/tema-inicial.js"></script>
     <link rel="stylesheet" href="css/app.css" />

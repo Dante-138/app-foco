@@ -4,7 +4,7 @@ import { CHAVE, estado, salvar, problemaDeCarga, correcoesNaCarga } from './stor
 import { hoje } from './nucleo/datas.js';
 import { PROBLEMA } from './nucleo/estado.js';
 import { passoDoDeslize, vizinha } from './nucleo/gesto.js';
-import { h, icone, avisar, estadoVazio } from './ui.js';
+import { h, icone, avisar, estadoVazio, arrastouAgora } from './ui.js';
 import { rotinas, conferirRotinaDoDia } from './rotinas.js';
 import { habitos, marcarHabitoNoDia } from './habitos.js';
 import { tarefas } from './tarefas.js';
@@ -12,6 +12,7 @@ import { painel } from './painel.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
 import { agendarSincronia, ligarNotificacoes } from './lembretes.js';
+import { registrarOffline } from './offline.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
@@ -100,7 +101,7 @@ function ligarDeslize() {
   conteudo.addEventListener(
     'touchend',
     (e) => {
-      if (!inicio) return;
+      if (!inicio || arrastouAgora()) return;
       const fim = e.changedTouches[0];
       const passo = passoDoDeslize({
         dx: fim.clientX - inicio.x,
@@ -209,6 +210,7 @@ function iniciar() {
     irParaAba(abaDoTipo[tipo] ?? 'painel');
   });
   ligarNotificacoes();
+  registrarOffline();
 
   if (problemaDeCarga === PROBLEMA.ILEGIVEL) {
     avisar('Os dados salvos estavam ilegíveis. Uma cópia foi guardada e o app começou do zero.');
