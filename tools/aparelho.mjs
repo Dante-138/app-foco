@@ -189,9 +189,15 @@ const esperar = (ms) =>
     setTimeout(pronto, ms);
   });
 
+// O aviso que o adb escreve no stderr de um comando que deu certo não aparece; o de um comando que
+// falhou vem no erro (erro.stderr).
 function ligarAdb(serial) {
   return (...argumentos) =>
-    execFileSync('adb', ['-s', serial, ...argumentos], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    execFileSync('adb', ['-s', serial, ...argumentos], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 }
 
 function aparelhoEscolhido(pedido) {
@@ -206,8 +212,12 @@ function aparelhoEscolhido(pedido) {
   return serial;
 }
 
+// Só no usuário em uso: sem o filtro, o pm tenta os outros (a Pasta Segura da Samsung, por
+// exemplo) e o shell não tem permissão para eles.
 const instalado = (adb, pacote) =>
-  adb('shell', 'pm', 'list', 'packages', pacote).split(/\r?\n/).includes(`package:${pacote}`);
+  adb('shell', 'pm', 'list', 'packages', '--user', 'current', pacote)
+    .split(/\r?\n/)
+    .includes(`package:${pacote}`);
 
 // Abre o app e liga no WebView dele. Recusa a tela bloqueada: desbloquear é do dono do aparelho.
 async function abrirApp(adb, serial, pacote) {
