@@ -20,6 +20,18 @@ async function arrastar(pagina, de, ate) {
 
 const salvoDe = async (pagina) => JSON.parse(await lerSalvo(pagina, CHAVE));
 
+// Guarda em window.ponteiroDoTeste o pointerId do próximo toque, para simular eventos dele.
+const guardarPonteiro = (pagina) =>
+  pagina.evaluate(() =>
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        window.ponteiroDoTeste = e.pointerId;
+      },
+      { capture: true, once: true },
+    ),
+  );
+
 test('tarefas: segurar e arrastar muda a ordem e liga a Minha ordem, com Desfazer', async (t) => {
   const tarefa = (id, titulo, extra = {}) => ({
     id,
@@ -160,17 +172,73 @@ test('tarefas: se o sistema toma o gesto no meio do arrasto, a linha volta e nad
   const caixa = await linha('Ler o livro').boundingBox();
   const destino = await linha(antes[0]).boundingBox();
   const x = caixa.x + caixa.width / 2;
+  await guardarPonteiro(pagina);
   await pagina.mouse.move(x, caixa.y + caixa.height / 2);
   await pagina.mouse.down();
   await pagina.locator('.arrastando').waitFor(ESPERA);
   await pagina.mouse.move(x, destino.y + destino.height * 0.3, { steps: 12 });
   assert.notDeepEqual(await titulos(), antes); // a linha já andou na tela
-  await pagina.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel')));
+  // O cancelamento do sistema vem do mesmo ponteiro que segura a linha.
+  await pagina.evaluate(() =>
+    window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: window.ponteiroDoTeste })),
+  );
   await pagina.mouse.up();
 
   assert.deepEqual(await titulos(), antes);
   assert.equal(await pagina.locator('.arrastando').count(), 0);
   assert.notEqual((await salvoDe(pagina)).ordemTarefas, 'manual');
+  assert.deepEqual(erros, []);
+});
+
+test('tarefas: outro dedo que se mexe ou sobe no meio do arrasto não desvia nem solta a linha', async (t) => {
+  const tarefa = (id, titulo) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo: null,
+    estrela: false,
+    feita: false,
+    criadaEm: 1,
+    feitaEm: null,
+  });
+  const salvo = JSON.stringify({
+    versao: 2,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Faculdade' }],
+    listaAtiva: 'l',
+    ordemTarefas: 'manual',
+    tarefas: [tarefa('a', 'Prova'), tarefa('b', 'Trabalho'), tarefa('c', 'Ler o livro')],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const titulos = () => pagina.locator('.tarefa-titulo').allTextContents();
+  const linha = (titulo) => pagina.locator('li.tarefa', { hasText: titulo }).locator('.tarefa-corpo');
+
+  const caixa = await linha('Ler o livro').boundingBox();
+  const destino = await linha('Prova').boundingBox();
+  const x = caixa.x + caixa.width / 2;
+  await guardarPonteiro(pagina);
+  await pagina.mouse.move(x, caixa.y + caixa.height / 2);
+  await pagina.mouse.down();
+  await pagina.locator('.arrastando').waitFor(ESPERA);
+  await pagina.mouse.move(x, destino.y + destino.height * 0.3, { steps: 12 });
+  assert.deepEqual(await titulos(), ['Ler o livro', 'Prova', 'Trabalho']);
+
+  // Um segundo dedo desce lá embaixo, se mexe e sobe: a linha continua no primeiro dedo.
+  await pagina.evaluate(() => {
+    const outro = { pointerId: window.ponteiroDoTeste + 7, clientX: 10, clientY: window.innerHeight - 5 };
+    window.dispatchEvent(new PointerEvent('pointermove', outro));
+    window.dispatchEvent(new PointerEvent('pointerup', outro));
+  });
+  assert.equal(await pagina.locator('.arrastando').count(), 1);
+  assert.deepEqual(await titulos(), ['Ler o livro', 'Prova', 'Trabalho']);
+
+  await pagina.mouse.up();
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.deepEqual(
+    (await salvoDe(pagina)).tarefas.map((salva) => salva.id),
+    ['c', 'a', 'b'],
+  );
   assert.deepEqual(erros, []);
 });
 

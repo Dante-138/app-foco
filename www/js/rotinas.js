@@ -839,4 +839,6 @@ export const rotinas = {
     else editarRotina(null);
   },
   flutuante: acaoFlutuante,
+  // Sair da aba com a rotina em edição conclui a edição: o voltar não fica preso a ela.
+  aoSair: terminarEdicaoAberta,
 };

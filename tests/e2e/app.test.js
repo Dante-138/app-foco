@@ -788,6 +788,15 @@ test('rotina: o voltar na edição conclui a edição, sem sair do app, e a tela
   await pagina.waitForFunction(() => window.history.state?.folha === true, null, ESPERA);
   await botao(pagina, 'Concluir edição').click();
   await pagina.waitForFunction(() => window.history.state?.folha !== true, null, ESPERA);
+
+  // Trocar de aba no meio da edição também conclui: o voltar não fica preso a uma rotina fora da tela.
+  await botao(pagina, 'Editar itens').click();
+  await pagina.waitForFunction(() => window.history.state?.folha === true, null, ESPERA);
+  await pagina.locator('#abas button', { hasText: 'Tarefas' }).click();
+  await pagina.waitForFunction(() => window.history.state?.folha !== true, null, ESPERA);
+  await pagina.locator('#abas button', { hasText: 'Rotinas' }).click();
+  await visivel(botao(pagina, 'Editar itens'));
+  assert.equal(await botao(pagina, 'Concluir edição').count(), 0);
   assert.deepEqual(erros, []);
 });
 

@@ -699,6 +699,7 @@ export function reordenavel(
       for (const el of juntas) el.hidden = true;
     });
     const antes = ids().join('\n');
+    const ponteiro = inicio.ponteiro; // só o dedo que levantou a linha move e solta; outro dedo não
     let dedoY = inicio.y;
     let deslocamento = 0; // translateY da linha levantada
     const pegaY = inicio.y - linha.getBoundingClientRect().top; // onde o dedo pegou a linha
@@ -736,6 +737,7 @@ export function reordenavel(
       seguirDedo();
     };
     const mover = (e) => {
+      if (e.pointerId !== ponteiro) return;
       dedoY = e.clientY;
       posicionar();
     };
@@ -749,6 +751,7 @@ export function reordenavel(
     quadro = requestAnimationFrame(rolar);
 
     const terminar = (e) => {
+      if (e.pointerId !== ponteiro) return;
       window.removeEventListener('pointermove', mover);
       window.removeEventListener('pointerup', terminar);
       window.removeEventListener('pointercancel', terminar);
@@ -798,7 +801,7 @@ export function reordenavel(
     cancelar();
     const linha = e.button > 0 ? null : e.target.closest(pega)?.closest(linhas);
     if (!linha || !elemento.contains(linha)) return;
-    inicio = { x: e.clientX, y: e.clientY };
+    inicio = { x: e.clientX, y: e.clientY, ponteiro: e.pointerId };
     if (imediato) {
       e.preventDefault(); // a alça não seleciona texto nem tira o foco do campo
       arrastar(linha);
