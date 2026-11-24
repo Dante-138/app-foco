@@ -33,7 +33,8 @@
 //                    prazo; padrão: nenhum; ver lembretes.js),
 //                    estrela, feita, criadaEm, feitaEm: número | null,
 //                    subtarefas: [{ id, titulo, feita }] (os passos da tarefa; padrão: nenhum) }]
-//   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
+//   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao' | 'manual'   (padrão: 'data';
+//                 'manual' é a Minha ordem, a ordem guardada em tarefas, mudada ao arrastar)
 //   lembretes:    verdadeiro agenda as notificações do app (padrão: verdadeiro); desligado, nada avisa
 //   avisosDoDia:  { manha, noite, rotina, habitos }: quais avisos do dia estão ligados (padrão:
 //                 todos menos a rotina; ver avisos-do-dia.js)
@@ -72,7 +73,8 @@ export const ABAS = Object.freeze(['rotinas', 'habitos', 'tarefas', 'painel']);
 export const VISAO_ESTRELA = 'estrela'; // valor de listaAtiva para a visão "com estrela"
 export const NOME_LISTA_PADRAO = 'Minhas tarefas';
 // Ordens da lista de tarefas; a primeira é a padrão. A ordenação em si está em prazos.js.
-export const ORDENS_TAREFAS = Object.freeze(['data', 'estrela', 'titulo', 'criacao']);
+// "manual" (Minha ordem) é a ordem em que as tarefas estão guardadas, mudada ao arrastar.
+export const ORDENS_TAREFAS = Object.freeze(['data', 'estrela', 'titulo', 'criacao', 'manual']);
 
 export const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 

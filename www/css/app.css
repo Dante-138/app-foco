@@ -877,12 +877,23 @@ body {
   touch-action: none;
 }
 
-.edicao li.arrastando {
+.edicao li.arrastando,
+.tarefa.arrastando,
+.habito.arrastando {
   position: relative;
   z-index: 3;
   border-radius: 10px;
   background: var(--sup-2);
   box-shadow: 0 4px 14px var(--sombra);
+}
+
+/* Segurar a tarefa ou o nome do hábito solta a linha para arrastar: não seleciona o texto nem
+   chama o menu do sistema. */
+.tarefa-corpo,
+.habito-nome {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .campo-hora {
