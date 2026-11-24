@@ -774,10 +774,11 @@ export function reordenavel(
       const depois = ids();
       const id = linha.dataset[chave];
       const mudou = depois.join('\n') !== antes;
+      // Sem mudança à vista, a linha volta já ao lugar exato de antes, antes de assentar: entre as
+      // escondidas (o bloco da seção) ela pode ter parado do outro lado delas, e nada redesenha a
+      // tela. As escondidas não ocupam espaço, então o deslocamento da soltura continua valendo.
+      if (!mudou) lugar.pai.insertBefore(linha, lugar.proxima);
       const gravar = () => {
-        // Sem mudança à vista, a linha volta ao lugar exato de antes: entre as escondidas (o
-        // bloco da seção) ela pode ter parado do outro lado delas, e nada redesenha a tela.
-        if (!mudou) lugar.pai.insertBefore(linha, lugar.proxima);
         concluir();
         if (mudou) aoSoltar(depois, id);
       };
