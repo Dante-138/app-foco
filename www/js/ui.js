@@ -588,6 +588,131 @@ export function aoSegurar(elemento, acao) {
   );
 }
 
+// Segurar e arrastar para mudar a ordem, como no iPhone. Segurar a "pega" de uma linha pelo
+// mesmo tempo do aoSegurar, sem mexer o dedo, solta a linha da lista: ela segue o dedo, a tela
+// para de rolar e a lista rola sozinha perto da borda. Ao soltar, aoSoltar recebe os ids
+// (data-id) das linhas na ordem nova da tela, só se a ordem mudou. Mexer o dedo antes do tempo
+// é rolagem, e o toque segue normal. O clique que viria ao soltar não acontece.
+// "elemento" é fixo (o #conteudo): ligar uma vez só por tela, com seletores que só ela usa.
+const FOLGA_DO_DEDO = 10; // px que o dedo pode tremer enquanto segura
+const BORDA_QUE_ROLA = 56; // px perto da borda da área rolável em que a lista rola sozinha
+let fimDoUltimoArraste = -Infinity;
+
+// O deslize entre abas (app.js) ignora o dedo que acabou de arrastar uma linha.
+export const arrastouAgora = () => performance.now() - fimDoUltimoArraste < 400;
+
+export function rolarSePerto(area, y) {
+  const caixa = area.getBoundingClientRect();
+  if (y < caixa.top + BORDA_QUE_ROLA) area.scrollTop -= 12;
+  else if (y > caixa.bottom - BORDA_QUE_ROLA) area.scrollTop += 12;
+}
+
+export function reordenavel(elemento, { linhas, pega, aoSoltar }) {
+  let espera = null;
+  let inicio = null;
+  let arrastando = null;
+  let engolirClique = false;
+  const cancelar = () => {
+    clearTimeout(espera);
+    espera = null;
+  };
+  const ids = () => [...elemento.querySelectorAll(linhas)].map((el) => el.dataset.id);
+
+  const arrastar = (linha) => {
+    espera = null;
+    arrastando = linha;
+    engolirClique = true;
+    const antes = ids().join('\n');
+    const lugar = { pai: linha.parentNode, proxima: linha.nextSibling };
+    let dedoY = inicio.y;
+    let quadro = null;
+    linha.classList.add('arrastando');
+    vibrar('arrastar');
+
+    // A linha vai para antes da primeira outra cujo meio está abaixo do dedo (ou para o fim).
+    const posicionar = () => {
+      const outras = [...elemento.querySelectorAll(linhas)].filter((el) => el !== linha);
+      const acima = outras.filter((el) => {
+        const caixa = el.getBoundingClientRect();
+        return caixa.top + caixa.height / 2 < dedoY;
+      }).length;
+      const alvo = outras[acima];
+      if (alvo && linha.nextElementSibling !== alvo) alvo.before(linha);
+      else if (!alvo && outras.length && outras.at(-1).nextElementSibling !== linha)
+        outras.at(-1).after(linha);
+    };
+    const mover = (e) => {
+      dedoY = e.clientY;
+      posicionar();
+    };
+    // Com o dedo parado perto da borda, a lista continua rolando, e a linha acompanha.
+    const rolar = () => {
+      const topo = elemento.scrollTop;
+      rolarSePerto(elemento, dedoY);
+      if (elemento.scrollTop !== topo) posicionar();
+      quadro = requestAnimationFrame(rolar);
+    };
+    quadro = requestAnimationFrame(rolar);
+
+    const terminar = (e) => {
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', terminar);
+      window.removeEventListener('pointercancel', terminar);
+      cancelAnimationFrame(quadro);
+      linha.classList.remove('arrastando');
+      arrastando = null;
+      fimDoUltimoArraste = performance.now();
+      // O sistema tomou o gesto (pointercancel): a linha volta para onde estava e nada grava.
+      if (e.type === 'pointercancel') {
+        lugar.pai.insertBefore(linha, lugar.proxima);
+        return;
+      }
+      const depois = ids();
+      if (depois.join('\n') !== antes) aoSoltar(depois);
+    };
+
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', terminar);
+    window.addEventListener('pointercancel', terminar);
+  };
+
+  elemento.addEventListener('pointerdown', (e) => {
+    engolirClique = false;
+    cancelar();
+    const linha = e.button > 0 ? null : e.target.closest(pega)?.closest(linhas);
+    if (!linha || !elemento.contains(linha)) return;
+    inicio = { x: e.clientX, y: e.clientY };
+    espera = setTimeout(() => arrastar(linha), TEMPO_DE_SEGURAR_MS);
+  });
+  elemento.addEventListener('pointermove', (e) => {
+    if (espera && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) > FOLGA_DO_DEDO) cancelar();
+  });
+  for (const tipo of ['pointerup', 'pointercancel']) elemento.addEventListener(tipo, cancelar);
+  // Com a linha no dedo, a tela não rola (o primeiro toque que se mexe ainda pode ser barrado).
+  elemento.addEventListener(
+    'touchmove',
+    (e) => {
+      if (arrastando && e.cancelable) e.preventDefault();
+    },
+    { passive: false },
+  );
+  // Segurar no Android abre o menu do sistema (ou seleciona texto); na pega, não.
+  elemento.addEventListener('contextmenu', (e) => {
+    if (e.target.closest(pega)) e.preventDefault();
+  });
+  // O clique que o navegador manda logo depois de soltar não abre a tarefa nem o hábito. Só
+  // esse: um toque novo (ou o teclado, passado o instante) volta a abrir.
+  elemento.addEventListener(
+    'click',
+    (e) => {
+      if (!engolirClique || !arrastouAgora()) return;
+      engolirClique = false;
+      e.stopImmediatePropagation();
+    },
+    { capture: true },
+  );
+}
+
 // Resposta tátil. No app Android vai pelo plugin local Haptica (HapticaPlugin.java), que usa os
 // efeitos do próprio sistema e segue a opção de vibração ao toque do aparelho. No navegador,
 // navigator.vibrate faz um toque curto. Tipos: marcar, desmarcar, concluido, segurar, arrastar.
