@@ -204,3 +204,59 @@ test('hábitos: segurar o nome e arrastar muda a ordem; os ocultos não saem do 
   assert.equal(await pagina.locator('dialog[open]').count(), 0);
   assert.deepEqual(erros, []);
 });
+
+test('rotina: segurar um item ou o nome de uma seção e arrastar muda a ordem, sem entrar na edição', async (t) => {
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const secao = (id, texto) => ({ id, tipo: 'secao', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'rotinas',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          secao('s1', 'ACORDAR'),
+          item('i1', 'Levantar'),
+          item('i2', 'Beber água'),
+          secao('s2', 'SAIR'),
+          item('i3', 'Pegar a chave'),
+          item('i4', 'Fechar a porta'),
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const linhaDoItem = (texto) => pagina.locator('.area-pendentes .rotina-item', { hasText: texto });
+  const nomeDaSecao = (texto) => pagina.locator('.area-pendentes .secao-nome', { hasText: texto });
+  const pendentes = () =>
+    pagina.locator('.area-pendentes .rotina-texto, .area-pendentes .secao-nome').allTextContents();
+  const ordem = async () => (await salvoDe(pagina)).rotinas[0].itens.map((i) => i.id);
+
+  // "Beber água" marcado vai para a área de baixo.
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  await pagina.waitForFunction(() => document.querySelectorAll('.area-marcados .rotina-texto').length === 1);
+
+  // Item de SAIR para o alto de ACORDAR. O marcado continua em ACORDAR.
+  await arrastar(pagina, linhaDoItem('Fechar a porta'), linhaDoItem('Levantar'));
+  assert.deepEqual(await pendentes(), ['ACORDAR', 'Fechar a porta', 'Levantar', 'SAIR', 'Pegar a chave']);
+  assert.deepEqual(await ordem(), ['s1', 'i4', 'i1', 'i2', 's2', 'i3']);
+  assert.equal(await botao(pagina, 'Concluir edição').count(), 0); // a edição não abriu
+
+  // A seção SAIR, segura pelo nome, leva o bloco para antes de ACORDAR.
+  await arrastar(pagina, nomeDaSecao('SAIR'), nomeDaSecao('ACORDAR'));
+  assert.deepEqual(await pendentes(), ['SAIR', 'Pegar a chave', 'ACORDAR', 'Fechar a porta', 'Levantar']);
+  assert.deepEqual(await ordem(), ['s2', 'i3', 's1', 'i4', 'i1', 'i2']);
+
+  // Segurar e soltar no lugar não marca o item.
+  const caixa = await linhaDoItem('Levantar').boundingBox();
+  await pagina.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+  await pagina.mouse.down();
+  await pagina.locator('.arrastando').waitFor(ESPERA);
+  await pagina.mouse.up();
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.equal(await linhaDoItem('Levantar').getAttribute('aria-checked'), 'false');
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(erros, []);
+});
