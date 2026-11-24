@@ -1,0 +1,86 @@
+name: Pages
+
+# A cada merge na main, publica o app web no GitHub Pages: o mesmo www/ do APK, montado por
+# tools/montar-web.mjs (carimbo do build e lista de arquivos do service worker, para abrir sem
+# rede). O job que monta só lê o repositório; o que publica não roda código do repositório e
+# recebe só a permissão do Pages e o OIDC que o deploy exige.
+#
+# O Pages é ligado uma vez pelo dono: Settings > Pages > Source "GitHub Actions". Desligado, o
+# workflow só avisa e termina verde.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  montar:
+    name: Montar o app web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: read # só para saber se o Pages está ligado
+    outputs:
+      ligado: ${{ steps.pages.outputs.ligado }}
+    steps:
+      - name: Conferir se o Pages está ligado
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+        # Só a resposta 404 quer dizer "desligado". Outro erro (permissão, rede) reprova o job, para
+        # o site não deixar de ser publicado sem ninguém ver.
+        run: |
+          if resposta=$(gh api "repos/$REPOSITORIO/pages" --jq .build_type 2>&1); then
+            echo "ligado=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "HTTP 404" <<< "$resposta"; then
+            echo "ligado=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages desligado: nada publicado (ver README, No navegador do PC)."
+          else
+            echo "::error::Não consegui saber se o Pages está ligado: $resposta"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.pages.outputs.ligado == 'true'
+        with:
+          persist-credentials: false
+
+      # Sem cache e sem npm: o montador usa só o Node e o git.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.pages.outputs.ligado == 'true'
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Montar
+        if: steps.pages.outputs.ligado == 'true'
+        run: node tools/montar-web.mjs _site
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: steps.pages.outputs.ligado == 'true'
+        with:
+          path: _site
+
+  publicar:
+    name: Publicar
+    needs: montar
+    if: needs.montar.outputs.ligado == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
