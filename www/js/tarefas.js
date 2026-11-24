@@ -24,8 +24,10 @@ import {
   estadoVazio,
   linhaCampo,
   redesenhar,
+  reordenavel,
   vibrar,
 } from './ui.js';
+import { reordenar } from './nucleo/reordenar.js';
 
 let concluidasAbertas = false;
 
@@ -41,7 +43,8 @@ let esperaRedesenho = null;
 // Devolve o id da próxima, para o Desfazer poder tirá-la.
 function criarProximaOcorrencia(tarefa) {
   const id = uid();
-  estado.tarefas.push({
+  // A próxima fica logo depois da concluída: em Minha ordem, a série não muda de lugar.
+  estado.tarefas.splice(estado.tarefas.indexOf(tarefa) + 1, 0, {
     ...tarefa,
     id,
     prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
@@ -244,14 +247,18 @@ function editarTarefa(tarefa) {
     if (tarefa) {
       Object.assign(tarefa, dados);
     } else {
-      estado.tarefas.push({
+      const nova = {
         id: uid(),
         ...dados,
         estrela: naEstrela,
         feita: false,
         criadaEm: Date.now(),
         feitaEm: null,
-      });
+      };
+      // Em Minha ordem a tarefa nova entra no alto, como no Google Tasks; nas outras, a ordem
+      // vem da regra escolhida.
+      if (estado.ordemTarefas === 'manual') estado.tarefas.unshift(nova);
+      else estado.tarefas.push(nova);
     }
     salvar();
     fechar();
@@ -424,6 +431,7 @@ const ROTULO_DA_ORDEM = {
   estrela: 'Com estrela primeiro',
   titulo: 'Título',
   criacao: 'Mais recentes primeiro',
+  manual: 'Minha ordem',
 };
 
 function escolherOrdem() {
@@ -538,7 +546,7 @@ function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = fals
 
   return h(
     'li',
-    { class: `tarefa${tarefa.feita ? ' feita' : ''}` },
+    { class: `tarefa${tarefa.feita ? ' feita' : ''}`, 'data-id': tarefa.id },
     h(
       'button',
       {
@@ -609,7 +617,38 @@ function cartoesDasPendentes(pendentes, naEstrela) {
   ];
 }
 
+// Segurar uma tarefa pendente e arrastar muda a ordem dela entre as que estão na tela. Em
+// qualquer outra ordem, a ordem da tela vira a Minha ordem, como no Google Tasks; nesse caso o
+// aviso traz o Desfazer, que devolve a ordem e a regra de antes (sem desfazer outras mudanças).
+function aoArrastarTarefas(ids) {
+  const antes = { ids: estado.tarefas.map((t) => t.id), ordem: estado.ordemTarefas };
+  estado.tarefas = reordenar(estado.tarefas, ids);
+  estado.ordemTarefas = 'manual';
+  salvar();
+  redesenhar();
+  if (antes.ordem === 'manual') return;
+  avisarComDesfazer('Lista em Minha ordem', () => {
+    if (estado.ordemTarefas !== 'manual') return; // trocou a ordem pelo menu nesse meio-tempo
+    estado.tarefas = reordenar(estado.tarefas, antes.ids);
+    estado.ordemTarefas = antes.ordem;
+    salvar();
+    redesenhar();
+  });
+}
+
+// O arraste fica no #conteudo, que é o mesmo em todas as abas: liga uma vez só. O data-id
+// separa as linhas desta aba das do Painel, que usam as mesmas classes.
+let arrasteLigado = false;
+
 function render(raiz) {
+  if (!arrasteLigado) {
+    reordenavel(raiz, {
+      linhas: 'li.tarefa[data-id]:not(.feita)',
+      pega: '.tarefa-corpo',
+      aoSoltar: aoArrastarTarefas,
+    });
+    arrasteLigado = true;
+  }
   const rolagemFaixa = raiz.querySelector('.faixa')?.scrollLeft ?? 0;
 
   const naEstrela = estado.listaAtiva === ESTRELA;
