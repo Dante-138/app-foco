@@ -44,6 +44,7 @@ const alfabetica = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: tr
 //   estrela: as com estrela primeiro; dentro de cada parte, por prazo
 //   titulo:  alfabética, sem diferenciar maiúsculas nem acentos
 //   criacao: as mais novas primeiro
+//   manual:  a ordem em que estão guardadas (Minha ordem, mudada ao arrastar)
 export function ordenar(pendentes, ordem) {
   const copia = [...pendentes];
   if (ordem === 'estrela')
@@ -52,6 +53,7 @@ export function ordenar(pendentes, ordem) {
     return copia.sort((a, b) => alfabetica.compare(a.titulo, b.titulo) || a.criadaEm - b.criadaEm);
   }
   if (ordem === 'criacao') return copia.sort((a, b) => b.criadaEm - a.criadaEm);
+  if (ordem === 'manual') return copia;
   return copia.sort(porPrazo);
 }
 

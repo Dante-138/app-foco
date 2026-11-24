@@ -180,6 +180,17 @@ test('ordenar por criação: as mais novas primeiro', () => {
   assert.deepEqual(titulos(ordenar(lista, 'criacao')), ['nova', 'do meio', 'velha']);
 });
 
+test('ordenar em Minha ordem: a ordem em que estão guardadas, sem olhar prazo nem criação', () => {
+  const lista = [
+    { titulo: 'sem data', prazo: null, criadaEm: 3 },
+    { titulo: 'dia 20', prazo: '2026-11-20', criadaEm: 1 },
+    { titulo: 'dia 18', prazo: '2026-11-18', criadaEm: 2 },
+  ];
+  const ordenada = ordenar(lista, 'manual');
+  assert.deepEqual(titulos(ordenada), ['sem data', 'dia 20', 'dia 18']);
+  assert.notEqual(ordenada, lista);
+});
+
 test('ordenar com ordem desconhecida usa o prazo, e nunca altera a lista recebida', () => {
   const lista = [
     { titulo: 'sem data', prazo: null, criadaEm: 1 },
