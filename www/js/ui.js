@@ -185,6 +185,22 @@ window.addEventListener('popstate', () => {
   agendarAcerto();
 });
 
+// Guarda do voltar para um modo da tela que não é folha (a edição da rotina): enquanto ele está
+// aberto, o voltar chama aoVoltar em vez de sair do app. Usa a mesma pilha das folhas, então uma
+// folha aberta por cima fecha primeiro. Devolve a função que tira a guarda; aoVoltar tem que
+// chamá-la (é ele quem fecha o modo).
+export function guardarVoltar(aoVoltar) {
+  const registro = { fechar: aoVoltar };
+  folhasAbertas.push(registro);
+  acertarHistorico();
+  return () => {
+    const posicao = folhasAbertas.indexOf(registro);
+    if (posicao < 0) return;
+    folhasAbertas.splice(posicao, 1);
+    agendarAcerto();
+  };
+}
+
 // Tempo e curva da mola de folha, lidos do CSS (variáveis --mola-folha*), com reserva.
 function molaDaFolha() {
   const css = getComputedStyle(document.documentElement);
@@ -588,18 +604,33 @@ export function aoSegurar(elemento, acao) {
   );
 }
 
-// Segurar e arrastar para mudar a ordem, como no iPhone. Segurar a "pega" de uma linha pelo
-// mesmo tempo do aoSegurar, sem mexer o dedo, solta a linha da lista: ela segue o dedo, a tela
-// para de rolar e a lista rola sozinha perto da borda. Ao soltar, aoSoltar recebe os ids
-// (data-id) das linhas na ordem nova da tela, só se a ordem mudou. Mexer o dedo antes do tempo
-// é rolagem, e o toque segue normal. O clique que viria ao soltar não acontece.
+// Segurar e arrastar para mudar a ordem, como no Google Keep. Segurar a "pega" de uma linha pelo
+// mesmo tempo do aoSegurar, sem mexer o dedo, levanta a linha: ela fica presa embaixo do dedo,
+// as outras deslizam para abrir o lugar, a tela para de rolar e a lista rola sozinha perto da
+// borda. Ao soltar, a linha assenta no lugar e aoSoltar(ids, id) recebe os ids (data-<chave>)
+// das linhas à vista na ordem nova e o id da que andou, só se a ordem mudou. Mexer o dedo antes
+// do tempo é rolagem, e o toque segue normal. O clique que viria ao soltar não acontece.
 // "elemento" é fixo (o #conteudo): ligar uma vez só por tela, com seletores que só ela usa.
+// Opções:
+//   imediato  levanta no primeiro toque, sem esperar (a alça da edição da rotina).
+//   chave     nome do data-* com o id (padrão "id").
+//   junto     (linha) => elementos que vão com ela (a seção leva o bloco): somem durante o
+//             arraste e não entram nos ids.
+//   alvos     (linha) => seletor das linhas que podem ficar logo abaixo dela (a seção só passa
+//             para antes de outra seção); sem ele, qualquer linha.
+//   fim       () => elemento antes do qual a linha fica quando vai para o fim da lista.
 const FOLGA_DO_DEDO = 10; // px que o dedo pode tremer enquanto segura
 const BORDA_QUE_ROLA = 56; // px perto da borda da área rolável em que a lista rola sozinha
+const ASSENTAR_MS = 160; // a linha solta desliza do dedo para o lugar dela
+const ABRIR_LUGAR_MS = 180; // as outras linhas deslizam para abrir o lugar
 let fimDoUltimoArraste = -Infinity;
+let emArraste = false; // do levantar até a linha assentar
 
-// O deslize entre abas (app.js) ignora o dedo que acabou de arrastar uma linha.
-export const arrastouAgora = () => performance.now() - fimDoUltimoArraste < 400;
+// O deslize entre abas (app.js) ignora o dedo que está arrastando ou acabou de arrastar uma linha.
+export const arrastouAgora = () => emArraste || performance.now() - fimDoUltimoArraste < 400;
+
+const semMovimento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CURVA_DO_ARRASTE = 'cubic-bezier(0.2, 0, 0, 1)';
 
 export function rolarSePerto(area, y) {
   const caixa = area.getBoundingClientRect();
@@ -607,7 +638,38 @@ export function rolarSePerto(area, y) {
   else if (y > caixa.bottom - BORDA_QUE_ROLA) area.scrollTop += 12;
 }
 
-export function reordenavel(elemento, { linhas, pega, aoSoltar }) {
+// Deslocamento vertical que a animação está aplicando agora: a posição de verdade da linha, para
+// decidir o lugar, é a da tela menos esse deslocamento.
+function deslocamentoAnimado(el) {
+  const transform = getComputedStyle(el).transform;
+  return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
+}
+
+// Muda a tela com "mudar" e faz as linhas que mudaram de altura deslizarem do lugar antigo para o
+// novo, em vez de pular (a técnica FLIP: mede, muda, inverte e anima até zero).
+const animacoesDeLugar = new WeakMap();
+function deslizarLinhas(linhas, mudar) {
+  const antes = new Map(linhas.map((el) => [el, el.getBoundingClientRect().top]));
+  mudar();
+  if (semMovimento()) return;
+  for (const el of linhas) {
+    animacoesDeLugar.get(el)?.cancel();
+    const de = antes.get(el) - el.getBoundingClientRect().top;
+    if (Math.abs(de) < 1) continue;
+    animacoesDeLugar.set(
+      el,
+      el.animate([{ transform: `translateY(${de}px)` }, { transform: 'none' }], {
+        duration: ABRIR_LUGAR_MS,
+        easing: CURVA_DO_ARRASTE,
+      }),
+    );
+  }
+}
+
+export function reordenavel(
+  elemento,
+  { linhas, pega, aoSoltar, imediato = false, chave = 'id', junto, alvos, fim },
+) {
   let espera = null;
   let inicio = null;
   let arrastando = null;
@@ -616,32 +678,66 @@ export function reordenavel(elemento, { linhas, pega, aoSoltar }) {
     clearTimeout(espera);
     espera = null;
   };
-  const ids = () => [...elemento.querySelectorAll(linhas)].map((el) => el.dataset.id);
+  const aVista = () => [...elemento.querySelectorAll(linhas)].filter((el) => !el.hidden);
+  const ids = () => aVista().map((el) => el.dataset[chave]);
 
   const arrastar = (linha) => {
     espera = null;
     arrastando = linha;
     engolirClique = true;
-    const antes = ids().join('\n');
+    emArraste = true;
+    const juntas = junto?.(linha) ?? [];
+    const seletorDosAlvos = alvos?.(linha);
     const lugar = { pai: linha.parentNode, proxima: linha.nextSibling };
+    animacoesDeLugar.get(linha)?.cancel(); // a linha pode estar deslizando de um arraste anterior
+    // Tudo o que pode mudar de altura: as linhas e o que mora entre elas (botões, títulos).
+    const vizinhas = () =>
+      [...new Set(aVista().map((el) => el.parentElement))]
+        .flatMap((pai) => [...pai.children])
+        .filter((el) => el !== linha && !el.hidden && !juntas.includes(el));
+    deslizarLinhas(vizinhas(), () => {
+      for (const el of juntas) el.hidden = true;
+    });
+    const antes = ids().join('\n');
+    const ponteiro = inicio.ponteiro; // só o dedo que levantou a linha move e solta; outro dedo não
     let dedoY = inicio.y;
+    let deslocamento = 0; // translateY da linha levantada
+    const pegaY = inicio.y - linha.getBoundingClientRect().top; // onde o dedo pegou a linha
     let quadro = null;
     linha.classList.add('arrastando');
     vibrar('arrastar');
 
-    // A linha vai para antes da primeira outra cujo meio está abaixo do dedo (ou para o fim).
+    // A linha fica presa embaixo do dedo, onde quer que o lugar dela esteja na lista.
+    const seguirDedo = () => {
+      const naLista = linha.getBoundingClientRect().top - deslocamento;
+      deslocamento = dedoY - pegaY - naLista;
+      linha.style.transform = `translateY(${deslocamento}px)`;
+    };
+
+    // O lugar é antes da primeira linha (entre os alvos) cujo meio está abaixo do dedo; sem
+    // nenhuma, o fim da lista.
     const posicionar = () => {
-      const outras = [...elemento.querySelectorAll(linhas)].filter((el) => el !== linha);
-      const acima = outras.filter((el) => {
-        const caixa = el.getBoundingClientRect();
-        return caixa.top + caixa.height / 2 < dedoY;
-      }).length;
-      const alvo = outras[acima];
-      if (alvo && linha.nextElementSibling !== alvo) alvo.before(linha);
-      else if (!alvo && outras.length && outras.at(-1).nextElementSibling !== linha)
-        outras.at(-1).after(linha);
+      const outras = aVista().filter((el) => el !== linha);
+      const candidatas = seletorDosAlvos ? outras.filter((el) => el.matches(seletorDosAlvos)) : outras;
+      const alvo = candidatas.find((el) => {
+        const topo = el.getBoundingClientRect().top - deslocamentoAnimado(el);
+        return topo + el.offsetHeight / 2 > dedoY;
+      });
+      const ultima = outras.at(-1);
+      const depoisDe = fim?.() ?? null;
+      let mudar = null;
+      if (alvo) {
+        if (linha.nextElementSibling !== alvo) mudar = () => alvo.before(linha);
+      } else if (depoisDe) {
+        if (linha.nextElementSibling !== depoisDe) mudar = () => depoisDe.before(linha);
+      } else if (ultima && ultima.nextElementSibling !== linha) {
+        mudar = () => ultima.after(linha);
+      }
+      if (mudar) deslizarLinhas(vizinhas(), mudar);
+      seguirDedo();
     };
     const mover = (e) => {
+      if (e.pointerId !== ponteiro) return;
       dedoY = e.clientY;
       posicionar();
     };
@@ -655,33 +751,67 @@ export function reordenavel(elemento, { linhas, pega, aoSoltar }) {
     quadro = requestAnimationFrame(rolar);
 
     const terminar = (e) => {
+      if (e.pointerId !== ponteiro) return;
       window.removeEventListener('pointermove', mover);
       window.removeEventListener('pointerup', terminar);
       window.removeEventListener('pointercancel', terminar);
       cancelAnimationFrame(quadro);
-      linha.classList.remove('arrastando');
-      arrastando = null;
-      fimDoUltimoArraste = performance.now();
+      const concluir = () => {
+        linha.classList.remove('arrastando');
+        for (const el of juntas) el.hidden = false;
+        arrastando = null;
+        emArraste = false;
+        fimDoUltimoArraste = performance.now();
+      };
+      const solta = deslocamento;
+      linha.style.transform = '';
       // O sistema tomou o gesto (pointercancel): a linha volta para onde estava e nada grava.
       if (e.type === 'pointercancel') {
         lugar.pai.insertBefore(linha, lugar.proxima);
+        concluir();
         return;
       }
       const depois = ids();
-      if (depois.join('\n') !== antes) aoSoltar(depois);
+      const id = linha.dataset[chave];
+      const mudou = depois.join('\n') !== antes;
+      // Sem mudança à vista, a linha volta já ao lugar exato de antes, antes de assentar: entre as
+      // escondidas (o bloco da seção) ela pode ter parado do outro lado delas, e nada redesenha a
+      // tela. As escondidas não ocupam espaço, então o deslocamento da soltura continua valendo.
+      if (!mudou) lugar.pai.insertBefore(linha, lugar.proxima);
+      const gravar = () => {
+        concluir();
+        if (mudou) aoSoltar(depois, id);
+      };
+      if (semMovimento() || Math.abs(solta) < 1) {
+        gravar();
+        return;
+      }
+      // A linha desliza do dedo para o lugar; a gravação (que redesenha a tela) vem depois.
+      linha.animate([{ transform: `translateY(${solta}px)` }, { transform: 'none' }], {
+        duration: ASSENTAR_MS,
+        easing: CURVA_DO_ARRASTE,
+      });
+      setTimeout(gravar, ASSENTAR_MS);
     };
 
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', terminar);
     window.addEventListener('pointercancel', terminar);
+    posicionar();
   };
 
   elemento.addEventListener('pointerdown', (e) => {
+    if (arrastando) return; // a linha anterior ainda está assentando
     engolirClique = false;
     cancelar();
     const linha = e.button > 0 ? null : e.target.closest(pega)?.closest(linhas);
     if (!linha || !elemento.contains(linha)) return;
-    inicio = { x: e.clientX, y: e.clientY };
+    inicio = { x: e.clientX, y: e.clientY, ponteiro: e.pointerId };
+    if (imediato) {
+      e.preventDefault(); // a alça não seleciona texto nem tira o foco do campo
+      arrastar(linha);
+      return;
+    }
     espera = setTimeout(() => arrastar(linha), TEMPO_DE_SEGURAR_MS);
   });
   elemento.addEventListener('pointermove', (e) => {

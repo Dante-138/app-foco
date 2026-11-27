@@ -14,7 +14,7 @@ import {
   naOrdem,
   remover,
 } from './nucleo/rotina-edicao.js';
-import { h, icone, avisar, redesenhar, vibrar } from './ui.js';
+import { h, icone, avisar, guardarVoltar, redesenhar, reordenavel } from './ui.js';
 
 // Desfazer e refazer da edição: fotos do nome e dos itens da rotina. Uma foto é tirada
 // antes de cada mudança de estrutura (criar ou tirar linha) e quando um campo recebe o
@@ -47,6 +47,7 @@ export const refazerEdicao = (rotina) => voltarPara(rotina, historico.futuro, hi
 
 let editando = null; // id da rotina em edição
 let focarEm = null; // id do item que recebe o foco no próximo desenho
+let tirarGuarda = null; // enquanto edita, o voltar do Android conclui a edição em vez de sair do app
 
 export const emEdicao = (rotina) => Boolean(rotina) && editando === rotina.id;
 
@@ -89,6 +90,8 @@ export function entrarNaEdicao(rotina, { adicionar = false } = {}) {
     historico.futuro = [];
   }
   editando = rotina.id;
+  tirarGuarda ??= guardarVoltar(terminarEdicaoAberta);
+  ligarArraste();
   registrar(rotina);
   if (adicionar && cabeNaRotina(rotina)) {
     const novo = novoItem('item');
@@ -103,6 +106,8 @@ export function sairDaEdicao(rotina) {
   if (!emEdicao(rotina)) return;
   editando = null;
   focarEm = null;
+  tirarGuarda?.();
+  tirarGuarda = null;
   clearTimeout(espera);
   pendente = false;
   rotina.nome = rotina.nome.trim().slice(0, LIMITES.nomeRotina).trim() || 'Rotina';
@@ -216,17 +221,9 @@ function botaoDeAdicionar(rotina, idDaSecao) {
 
 // ------------------------------------------------------------- arrastar
 
-// Alça de arrastar, no começo de cada linha. Só ela inicia o arraste: no resto da linha
-// o dedo rola a lista e edita os campos.
+// Alça de arrastar, no começo de cada linha. Na edição, só ela arrasta, já no primeiro toque: no
+// resto da linha o dedo rola a lista e edita os campos.
 const alca = () => h('span', { class: 'alca', 'aria-hidden': 'true' }, icone('alca', { tam: 18 }));
-
-// Perto da borda de cima ou de baixo da área rolável, a lista rola sozinha.
-function rolarSePerto(y) {
-  const area = document.getElementById('conteudo');
-  const caixa = area.getBoundingClientRect();
-  if (y < caixa.top + 56) area.scrollTop -= 12;
-  else if (y > caixa.bottom - 56) area.scrollTop += 12;
-}
 
 // Linhas que vão junto com uma seção: os itens dela e o "Adicionar item" do bloco.
 function linhasDoBloco(cabecalho) {
@@ -242,60 +239,39 @@ function linhasDoBloco(cabecalho) {
   return linhas;
 }
 
-// Arraste de uma linha: o item pode ir para qualquer lugar (outra seção, ou antes da
-// primeira seção); a seção leva o bloco inteiro e só troca de lugar com outras seções.
-// A linha muda de posição na tela enquanto o dedo anda; ao soltar, a rotina segue a tela.
-function arrastar(lista, rotina, linha, inicio) {
-  const ehSecao = linha.classList.contains('edicao-secao');
-  const secoesAntes = [...lista.querySelectorAll('li.edicao-secao')];
-  const juntas = ehSecao ? linhasDoBloco(linha) : [];
-  for (const el of juntas) el.hidden = true;
-  linha.classList.add('arrastando');
-  vibrar('arrastar');
-  const seletor = ehSecao ? 'li.edicao-secao' : 'li.edicao-item, li.edicao-secao';
-  const fim = lista.lastElementChild;
-
-  const mover = (e) => {
-    const outras = [...lista.querySelectorAll(seletor)].filter((el) => el !== linha && !el.hidden);
-    const acima = outras.filter((el) => {
-      const caixa = el.getBoundingClientRect();
-      return caixa.top + caixa.height / 2 < e.clientY;
-    }).length;
-    const alvo = outras[acima] ?? fim;
-    if (linha.nextElementSibling !== alvo) lista.insertBefore(linha, alvo);
-    rolarSePerto(e.clientY);
-  };
-
-  const soltar = () => {
-    window.removeEventListener('pointermove', mover);
-    window.removeEventListener('pointerup', soltar);
-    window.removeEventListener('pointercancel', soltar);
-    registrar(rotina);
-    if (ehSecao) {
-      const para = [...lista.querySelectorAll('li.edicao-secao')].indexOf(linha);
-      rotina.itens = moverSecao(rotina.itens, secoesAntes.indexOf(linha), para);
-    } else {
-      const ids = [...lista.querySelectorAll('li.edicao-item, li.edicao-secao')].map(
-        (el) => el.dataset.linha,
-      );
-      rotina.itens = naOrdem(rotina.itens, ids);
-    }
-    salvar();
-    redesenhar();
-  };
-
-  window.addEventListener('pointermove', mover);
-  window.addEventListener('pointerup', soltar);
-  window.addEventListener('pointercancel', soltar);
-  mover(inicio);
+// Ao soltar: o item pode ter ido para qualquer lugar (outra seção, ou antes da primeira seção);
+// a seção leva o bloco inteiro e só troca de lugar com outras seções.
+function aoArrastarNaEdicao(ids, id) {
+  const rotina = estado.rotinas.find((r) => r.id === editando);
+  if (!rotina) return;
+  registrar(rotina);
+  const movida = rotina.itens.find((i) => i.id === id);
+  if (movida?.tipo === 'secao') {
+    const secoes = new Set(rotina.itens.filter((i) => i.tipo === 'secao').map((i) => i.id));
+    const de = [...secoes].indexOf(id);
+    const para = ids.filter((x) => secoes.has(x)).indexOf(id);
+    rotina.itens = moverSecao(rotina.itens, de, para);
+  } else {
+    rotina.itens = naOrdem(rotina.itens, ids);
+  }
+  salvar();
+  redesenhar();
 }
 
-function ligarArraste(lista, rotina) {
-  lista.addEventListener('pointerdown', (e) => {
-    const pega = e.target.closest('.alca');
-    if (!pega || e.button > 0) return;
-    e.preventDefault();
-    arrastar(lista, rotina, pega.closest('li'), e);
+// O arraste mora no #conteudo, que é o mesmo em todas as abas: liga uma vez só.
+let arrasteLigado = false;
+function ligarArraste() {
+  if (arrasteLigado) return;
+  arrasteLigado = true;
+  reordenavel(document.getElementById('conteudo'), {
+    linhas: '.edicao > li[data-linha]',
+    pega: '.alca',
+    chave: 'linha',
+    imediato: true,
+    junto: (linha) => (linha.classList.contains('edicao-secao') ? linhasDoBloco(linha) : []),
+    alvos: (linha) => (linha.classList.contains('edicao-secao') ? '.edicao-secao' : null),
+    fim: () => document.querySelector('.edicao > li:last-child'), // antes de "Nova seção"
+    aoSoltar: aoArrastarNaEdicao,
   });
 }
 
@@ -345,7 +321,6 @@ export function listaEmEdicao(rotina, { aoRemoverItem }) {
     focarEm = null;
     queueMicrotask(() => lista.querySelector(`.campo-texto[data-id="${CSS.escape(id)}"]`)?.focus());
   }
-  ligarArraste(lista, rotina);
   return lista;
 }
 
@@ -366,8 +341,16 @@ export function campoDoNome(rotina) {
   return nome;
 }
 
-// Ao trocar de rotina com uma em edição, a edição dela termina.
+// Ao trocar de rotina com uma em edição, a edição dela termina. É também o voltar do Android na
+// edição. Se a rotina já não existe, a edição e a guarda do voltar saem do mesmo jeito: guarda
+// sem dono prenderia o voltar dentro do app.
 export function terminarEdicaoAberta() {
   const aberta = estado.rotinas.find((r) => r.id === editando);
-  if (aberta) sairDaEdicao(aberta);
+  if (aberta) {
+    sairDaEdicao(aberta);
+    return;
+  }
+  editando = null;
+  tirarGuarda?.();
+  tirarGuarda = null;
 }

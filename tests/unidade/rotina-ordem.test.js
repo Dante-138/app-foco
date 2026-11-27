@@ -5,6 +5,7 @@ import {
   emAreas,
   emBlocos,
   marcarBloco,
+  moverNaTela,
   moverSecao,
   semAsUltimas,
 } from '../../www/js/nucleo/rotina-ordem.js';
@@ -144,4 +145,72 @@ test('mover seção com posição inválida, ou para o mesmo lugar, devolve a li
   }
   const semSecao = [item('x'), item('y')];
   assert.equal(moverSecao(semSecao, 0, 1), semSecao);
+});
+
+// Tela de marcar com "b" e "d" marcados (na área de baixo): NOITE, toda marcada, some da vista.
+const VISTA = ['solto1', 'solto2', 'MANHÃ', 'a', 'c', 'VAZIA'];
+const naVista = (lista) => ids(lista).filter((id) => !['b', 'd', 'NOITE'].includes(id));
+
+test('arrastar item na tela: fica logo depois da linha acima, e os marcados não saem da seção', () => {
+  const copia = structuredClone(ROTINA);
+  // solto2 para depois de "a", em MANHÃ: "b" (marcado) continua em MANHÃ, logo depois.
+  let vista = ['solto1', 'MANHÃ', 'a', 'solto2', 'c', 'VAZIA'];
+  let nova = moverNaTela(ROTINA, vista, 'solto2');
+  assert.deepEqual(ids(nova), ['solto1', 'MANHÃ', 'a', 'solto2', 'b', 'c', 'VAZIA', 'NOITE', 'd']);
+  assert.deepEqual(naVista(nova), vista);
+
+  // "c" logo abaixo do nome VAZIA: vira o primeiro item dela.
+  vista = ['solto1', 'solto2', 'MANHÃ', 'a', 'VAZIA', 'c'];
+  nova = moverNaTela(ROTINA, vista, 'c');
+  assert.deepEqual(ids(nova), ['solto1', 'solto2', 'MANHÃ', 'a', 'b', 'VAZIA', 'c', 'NOITE', 'd']);
+
+  // "a" no alto, sem linha acima: começo da rotina, fora das seções.
+  nova = moverNaTela(ROTINA, ['a', 'solto1', 'solto2', 'MANHÃ', 'c', 'VAZIA'], 'a');
+  assert.deepEqual(ids(nova), ['a', 'solto1', 'solto2', 'MANHÃ', 'b', 'c', 'VAZIA', 'NOITE', 'd']);
+  assert.deepEqual(ROTINA, copia); // a lista recebida não muda
+});
+
+test('arrastar seção na tela: leva o bloco inteiro, marcados junto, para depois do bloco acima', () => {
+  // Os itens da seção arrastada saem da vista durante o arraste.
+  let nova = moverNaTela(ROTINA, ['solto1', 'solto2', 'VAZIA', 'MANHÃ'], 'MANHÃ');
+  assert.deepEqual(ids(nova), ['solto1', 'solto2', 'VAZIA', 'MANHÃ', 'a', 'b', 'c', 'NOITE', 'd']);
+
+  // Linha acima é um item de outra seção: vai para depois do bloco dele.
+  nova = moverNaTela(ROTINA, ['solto1', 'solto2', 'VAZIA', 'NOITE', 'd', 'MANHÃ'], 'MANHÃ');
+  assert.deepEqual(ids(nova), ['solto1', 'solto2', 'VAZIA', 'NOITE', 'd', 'MANHÃ', 'a', 'b', 'c']);
+
+  // Item solto acima: antes das outras seções, e os soltos ficam onde estão.
+  nova = moverNaTela(ROTINA, ['solto1', 'solto2', 'VAZIA', 'MANHÃ', 'a', 'c'], 'VAZIA');
+  assert.deepEqual(ids(nova), ['solto1', 'solto2', 'VAZIA', 'MANHÃ', 'a', 'b', 'c', 'NOITE', 'd']);
+
+  // Sem linha acima, numa rotina sem itens soltos.
+  const sem = [secao('A'), item('1'), secao('B'), item('2')];
+  assert.deepEqual(ids(moverNaTela(sem, ['B', 'A', '1'], 'B')), ['B', '2', 'A', '1']);
+});
+
+test('arrastar na tela ignora ids que a rotina não tem; id fora da vista devolve a lista como veio', () => {
+  assert.deepEqual(ids(moverNaTela(ROTINA, ['fantasma', 'c', 'solto1'], 'c')), [
+    'c',
+    'solto1',
+    'solto2',
+    'MANHÃ',
+    'a',
+    'b',
+    'VAZIA',
+    'NOITE',
+    'd',
+  ]);
+  assert.deepEqual(ids(moverNaTela(ROTINA, ['solto1', 'fantasma', 'd'], 'd')), [
+    'solto1',
+    'd',
+    'solto2',
+    'MANHÃ',
+    'a',
+    'b',
+    'c',
+    'VAZIA',
+    'NOITE',
+  ]);
+  assert.equal(moverNaTela(ROTINA, VISTA, 'd'), ROTINA);
+  assert.equal(moverNaTela(ROTINA, [...VISTA, 'fantasma'], 'fantasma'), ROTINA);
 });

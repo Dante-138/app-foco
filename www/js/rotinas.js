@@ -7,7 +7,7 @@ import { hoje } from './nucleo/datas.js';
 import { registroAposItem, sugerirHabito } from './nucleo/ligacao.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
-import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
+import { desmarcarBloco, emAreas, marcarBloco, moverNaTela, semAsUltimas } from './nucleo/rotina-ordem.js';
 import { devolver } from './nucleo/rotina-edicao.js';
 import { devolver as devolverNaLista, retirar } from './nucleo/desfazer.js';
 import { abrirRotinaDoDia, definirDias, descreverDias } from './nucleo/rotina-do-dia.js';
@@ -33,6 +33,7 @@ import {
   campo,
   estadoVazio,
   redesenhar,
+  reordenavel,
   vibrar,
 } from './ui.js';
 
@@ -545,7 +546,7 @@ function tituloDaSecao(rotina, bloco, marcadas) {
   const marcada = bloco.itens.length > 0 && bloco.itens.every((item) => marcadas.has(item.id));
   return h(
     'li',
-    { class: `rotina-secao${marcada ? ' marcada' : ''}` },
+    { class: `rotina-secao${marcada ? ' marcada' : ''}`, 'data-id': bloco.secao.id },
     h(
       'button',
       {
@@ -569,7 +570,7 @@ function linha(rotina, item, marcadas, comHoras) {
   const feito = marcadas.has(item.id);
   return h(
     'li',
-    {},
+    { 'data-id': item.id },
     h(
       'button',
       {
@@ -711,7 +712,38 @@ function corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens }) {
   return [estadoVazio('Rotina vazia', 'Toque em + para adicionar o primeiro item.')];
 }
 
+// Segurar um item ou o nome de uma seção e arrastar muda a ordem, como no Google Keep, sem entrar
+// na edição. Só na área do que falta: os marcados, embaixo, ficam na seção em que estavam. A seção
+// leva o bloco dela e só passa para antes de outra seção.
+function aoArrastarNaRotina(ids, id) {
+  const ativa = rotinaAtiva();
+  ativa.itens = moverNaTela(ativa.itens, ids, id);
+  salvar();
+  redesenhar();
+}
+
+// Linhas que vão com uma seção: os itens dela que estão à vista, até a próxima seção.
+function blocoDaSecao(cabecalho) {
+  const linhas = [];
+  for (let el = cabecalho.nextElementSibling; el && !el.matches('.rotina-secao'); el = el.nextElementSibling)
+    linhas.push(el);
+  return linhas;
+}
+
+// O arraste mora no #conteudo, que é o mesmo em todas as abas: liga uma vez só.
+let arrasteLigado = false;
+
 function render(raiz) {
+  if (!arrasteLigado) {
+    reordenavel(raiz, {
+      linhas: '.area-pendentes > li[data-id]',
+      pega: '.rotina-item, .secao-nome',
+      junto: (el) => (el.matches('.rotina-secao') ? blocoDaSecao(el) : []),
+      alvos: (el) => (el.matches('.rotina-secao') ? '.rotina-secao' : null),
+      aoSoltar: aoArrastarNaRotina,
+    });
+    arrasteLigado = true;
+  }
   const rolagemFaixa = raiz.querySelector('.faixa')?.scrollLeft ?? 0;
 
   if (!estado.rotinas.length) {
@@ -763,16 +795,21 @@ function render(raiz) {
   );
 
   const editando = emEdicao(ativa);
-  raiz.replaceChildren(
-    faixa,
-    editando ? cabecalhoEmEdicao(ativa) : cabecalhoDaRotina(ativa, itens.length, feitos),
-    editando
-      ? null
-      : h(
+  // replaceChildren escreve "null" na tela para um null: a barra de progresso, que some na
+  // edição, entra só quando existe.
+  const progresso = editando
+    ? []
+    : [
+        h(
           'div',
           { class: 'progresso' },
           h('div', { class: 'progresso-barra', style: { transform: `scaleX(${porcento / 100})` } }),
         ),
+      ];
+  raiz.replaceChildren(
+    faixa,
+    editando ? cabecalhoEmEdicao(ativa) : cabecalhoDaRotina(ativa, itens.length, feitos),
+    ...progresso,
     ...corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens: itens.length > 0 }),
   );
   faixa.scrollLeft = rolagemFaixa;
@@ -802,4 +839,6 @@ export const rotinas = {
     else editarRotina(null);
   },
   flutuante: acaoFlutuante,
+  // Sair da aba com a rotina em edição conclui a edição: o voltar não fica preso a ela.
+  aoSair: terminarEdicaoAberta,
 };
