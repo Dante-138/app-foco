@@ -15,7 +15,8 @@ import { agendarSincronia, ligarNotificacoes } from './lembretes.js';
 import { registrarOffline } from './offline.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
-// flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
+// flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null; e
+// aoSair(): o que fazer quando a pessoa deixa a aba.
 // Ordem da barra de abas e do deslize. O app abre na última aba usada; na primeira vez, em
 // Rotinas (a aba padrão do estado inicial, em nucleo/estado.js), esteja ela onde estiver na barra.
 const ABAS = [painel, habitos, rotinas, tarefas];
@@ -72,6 +73,7 @@ function irParaAba(id) {
   const para = ABAS.findIndex((a) => a.id === id);
   if (para < 0 || para === de) return;
 
+  abaAtual().aoSair?.();
   estado.aba = id;
   salvar();
   desenhar();

@@ -877,18 +877,27 @@ body {
   touch-action: none;
 }
 
+/* A linha levantada fica por cima das outras e segue o dedo (o translateY vem do ui.js). */
 .edicao li.arrastando,
+.area-pendentes > li.arrastando,
 .tarefa.arrastando,
 .habito.arrastando {
   position: relative;
   z-index: 3;
   border-radius: 10px;
   background: var(--sup-2);
-  box-shadow: 0 4px 14px var(--sombra);
+  box-shadow: 0 6px 18px var(--sombra);
 }
 
-/* Segurar a tarefa ou o nome do hábito solta a linha para arrastar: não seleciona o texto nem
-   chama o menu do sistema. */
+/* O aperto do toque não encolhe a linha que está no dedo. */
+.arrastando :is(.rotina-item, .tarefa-corpo, .habito-nome) {
+  transform: none;
+}
+
+/* Segurar um item ou o nome de uma seção da rotina, uma tarefa ou o nome de um hábito levanta a
+   linha para arrastar: não seleciona o texto nem chama o menu do sistema. */
+.rotina-item,
+.secao-nome,
 .tarefa-corpo,
 .habito-nome {
   -webkit-user-select: none;

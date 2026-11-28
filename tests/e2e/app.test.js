@@ -751,6 +751,55 @@ test('rotina: na edição, a alça arrasta um item para outra seção e uma seç
   assert.deepEqual(erros, []);
 });
 
+test('rotina: o voltar na edição conclui a edição, sem sair do app, e a tela não mostra "null"', async (t) => {
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'rotinas',
+    rotinas: [{ id: 'r', nome: 'Home Office', itens: [item('i1', 'Levantar'), item('i2', '')] }],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const textosSoltos = () =>
+    pagina.evaluate(() =>
+      [...document.getElementById('conteudo').childNodes]
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => n.textContent),
+    );
+  const endereco = pagina.url();
+
+  await botao(pagina, 'Editar itens').click();
+  await visivel(botao(pagina, 'Concluir edição'));
+  assert.deepEqual(await textosSoltos(), []); // nada de "null" embaixo do nome
+  await pagina.getByRole('textbox', { name: 'Texto do item' }).first().fill('Levantar cedo');
+
+  // Voltar conclui a edição como o botão: grava, tira a linha vazia e fica no app.
+  await voltar(pagina);
+  await visivel(botao(pagina, 'Editar itens'));
+  assert.equal(await botao(pagina, 'Concluir edição').count(), 0);
+  assert.equal(pagina.url(), endereco);
+  assert.deepEqual(
+    JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas[0].itens.map((i) => i.texto),
+    ['Levantar cedo'],
+  );
+  await pagina.waitForFunction(() => window.history.state?.folha !== true, null, ESPERA);
+
+  // Pelo botão, a guarda do voltar também sai.
+  await botao(pagina, 'Editar itens').click();
+  await pagina.waitForFunction(() => window.history.state?.folha === true, null, ESPERA);
+  await botao(pagina, 'Concluir edição').click();
+  await pagina.waitForFunction(() => window.history.state?.folha !== true, null, ESPERA);
+
+  // Trocar de aba no meio da edição também conclui: o voltar não fica preso a uma rotina fora da tela.
+  await botao(pagina, 'Editar itens').click();
+  await pagina.waitForFunction(() => window.history.state?.folha === true, null, ESPERA);
+  await pagina.locator('#abas button', { hasText: 'Tarefas' }).click();
+  await pagina.waitForFunction(() => window.history.state?.folha !== true, null, ESPERA);
+  await pagina.locator('#abas button', { hasText: 'Rotinas' }).click();
+  await visivel(botao(pagina, 'Editar itens'));
+  assert.equal(await botao(pagina, 'Concluir edição').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: fazer uma cópia (sem as marcas do dia) e mover a rotina na faixa', async (t) => {
   const { pagina, erros } = await abrir(t);
   const nomes = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(0, -1); // o último é "Nova rotina"

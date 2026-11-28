@@ -76,3 +76,36 @@ export function moverSecao(itens, de, para) {
   blocos.splice(para, 0, movido);
   return [...soltos, ...blocos.flatMap((bloco) => [bloco.secao, ...bloco.itens])];
 }
+
+// Arrastar na tela de marcar, como no Google Keep. "visiveis" é a ordem em que ficaram as linhas
+// à vista (seções e itens que faltam) depois de arrastar a linha "id". Os itens fora da vista (os
+// marcados, na área de baixo) continuam na seção em que estavam.
+//   Item: fica logo depois da linha que ficou acima dele (no começo da seção, se for o nome dela).
+//   Sem linha acima, vai para o começo da rotina, antes da primeira seção.
+//   Seção: leva o bloco inteiro para depois do bloco da linha que ficou acima dela. Sem linha
+//   acima, ou com um item solto acima, vai para antes das outras seções.
+// Ids que a rotina não tem são ignorados. "id" fora da rotina ou da vista devolve a lista como veio.
+export function moverNaTela(itens, visiveis, id) {
+  const porId = new Map(itens.map((item) => [item.id, item]));
+  const conhecidos = visiveis.filter((v) => porId.has(v));
+  const posicao = conhecidos.indexOf(id);
+  if (posicao < 0) return itens;
+  const movido = porId.get(id);
+  const acima = porId.get(conhecidos[posicao - 1]) ?? null;
+
+  if (movido.tipo === 'item') {
+    const resto = itens.filter((item) => item !== movido);
+    const lugar = resto.indexOf(acima) + 1; // sem linha acima: -1 + 1, o começo
+    return [...resto.slice(0, lugar), movido, ...resto.slice(lugar)];
+  }
+
+  const blocos = emBlocos(itens);
+  const soltos = blocos[0].secao === null ? blocos.shift().itens : [];
+  const [bloco] = blocos.splice(
+    blocos.findIndex((b) => b.secao === movido),
+    1,
+  );
+  const doAcima = blocos.findIndex((b) => b.secao === acima || b.itens.includes(acima));
+  blocos.splice(doAcima + 1, 0, bloco); // sem bloco acima: -1 + 1, antes das outras seções
+  return [...soltos, ...blocos.flatMap((b) => [b.secao, ...b.itens])];
+}
